@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="QR kódy na odkaz, Wi-Fi, kontakt i českou QR platbu. Vizitky, kartičky a samolepky k tisku.">
+<link rel="canonical" href="https://nacti.me/app/">
+<meta property="og:title" content="Načti.me – QR kódy, QR platby a vizitky">
+<meta property="og:description" content="QR kód na web, Wi-Fi, kontakt i QR platbu. Vizitky a samolepky k tisku během minuty.">
+<meta property="og:url" content="https://nacti.me/app/">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Načti.me">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Načti.me</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#111113">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Syne:wght@700;800&family=Manrope:wght@500;700&family=Fraunces:ital,wght@0,400;0,600;1,400;1,600&family=Bodoni+Moda:ital,wght@0,400;0,800;1,400&family=Unbounded:wght@400;800&family=Bricolage+Grotesque:wght@400;800&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: jeden úzký sloupec. Nahoře kód, pod ním jedno pole, pod tím tisk. Nic navíc. */
+:root {
+  --bg: #f3f3f1;
+  --fg: #111113;
+  --muted: #74747b;
+  --line: #dcdcd8;
+  --field: #ffffff;
+  --paper: #ffffff;
+  --ok: #157a43;
+  --warn: #a35a00;
+  --shadow: 0 1px 1px rgba(17,17,19,.04), 0 18px 50px -18px rgba(17,17,19,.22);
+  --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0c0e; --fg: #f2f2f0; --muted: #8e8e95; --line: #27272c; --field: #151518;
+    --ok: #5fd08f; --warn: #f0b35a;
+    --shadow: 0 0 0 1px rgba(255,255,255,.04), 0 24px 60px -20px rgba(0,0,0,.8); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0c0e; --fg: #f2f2f0; --muted: #8e8e95; --line: #27272c; --field: #151518;
+  --ok: #5fd08f; --warn: #f0b35a;
+  --shadow: 0 0 0 1px rgba(255,255,255,.04), 0 24px 60px -20px rgba(0,0,0,.8); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font: 400 15px/1.5 var(--sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+
+.app { max-width: 440px; margin: 0 auto; display: grid; gap: 28px; padding-block: 20px 56px; }
+.brand { font-family: var(--sans); font-size: 17px; font-weight: 700; letter-spacing: -.02em; text-transform: none; color: var(--fg); }
+.brand em { font-style: normal; color: var(--muted); font-weight: 500; }
+.mark { align-items: baseline; font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; }
+
+/* Kód */
+.code { position: relative; width: 100%; aspect-ratio: 1; background: var(--paper); border-radius: 22px; box-shadow: var(--shadow); }
+.code canvas, .code img { position: absolute; inset: 7%; width: 86%; height: 86%; display: block; }
+.code img { opacity: 0; -webkit-touch-callout: default; }
+.code img.ready { opacity: 1; }
+.code .idle { position: absolute; inset: 0; display: grid; place-items: center; color: #9a9aa0; font-size: 14px; text-align: center; padding: 20%; }
+.caption { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-family: var(--mono); font-size: 12px; color: var(--muted); min-height: 18px; margin-top: -16px; font-variant-numeric: tabular-nums; }
+.caption b { color: var(--fg); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; flex: none; }
+.caption span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* Vstup */
+.block { display: grid; gap: 12px; }
+.modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; background: var(--line); padding: 2px; border-radius: 11px; }
+.modes button { border: 0; background: transparent; padding: 8px 6px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; }
+.modes button[aria-pressed="true"] { background: var(--field); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.field { display: grid; gap: 8px; }
+.field.grid2 { grid-template-columns: 1fr 1fr; }
+.field.grid2 .wide { grid-column: 1 / -1; }
+@media (max-width: 400px) { .field.grid2 { grid-template-columns: 1fr; } }
+.field input, .field textarea {
+  width: 100%; min-width: 0; border: 1px solid var(--line); background: var(--field); border-radius: 14px;
+  padding: 15px 16px; font-size: 17px; line-height: 1.4; resize: none; transition: border-color .15s;
+}
+.field input.num { font-variant-numeric: tabular-nums; }
+.field textarea { min-height: 56px; max-height: 160px; overflow-y: auto; }
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--fg); }
+.field input[aria-invalid="true"] { border-color: var(--warn); }
+.field ::placeholder { color: var(--muted); }
+.err { margin: -2px 2px 0; font-size: 13px; color: var(--warn); }
+
+.row { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.inks { display: flex; gap: 10px; }
+.inks button { width: 24px; height: 24px; border-radius: 50%; border: 0; cursor: pointer; background: var(--c); box-shadow: 0 0 0 1px color-mix(in srgb, var(--muted) 55%, transparent); }
+.inks button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--c); }
+.check-line { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.check-line.ok::before { content: "● "; color: var(--ok); }
+
+.save { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.dl { border: 0; border-radius: 14px; padding: 16px 20px; font-size: 16px; font-weight: 600; cursor: pointer; background: var(--fg); color: var(--bg); transition: transform .12s, opacity .15s; }
+.dl.alt { background: transparent; color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: .06em; }
+.dl:active:not(:disabled) { transform: scale(.98); }
+.dl:disabled { opacity: .35; cursor: default; }
+
+/* Tisk */
+.print { display: grid; gap: 14px; padding-top: 22px; border-top: 1px solid var(--line); }
+.print h2 { font-size: 13px; font-weight: 600; margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.print h2 span { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.formats { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.formats button { border: 0; border-radius: 14px; padding: 14px 8px 12px; cursor: pointer; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); display: grid; justify-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--fg); }
+.formats button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--fg); }
+.formats i { display: block; border: 1.5px solid currentColor; border-radius: 3px; opacity: .8; }
+.formats small { font-family: var(--mono); font-size: 10px; color: var(--muted); font-weight: 400; }
+.ai { border: 0; border-radius: 14px; padding: 15px 18px; font-size: 15px; font-weight: 600; cursor: pointer; color: var(--fg); background: var(--field); box-shadow: inset 0 0 0 1px var(--line); display: flex; align-items: center; justify-content: center; gap: 10px; }
+.ai:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--fg); }
+.ai:disabled { opacity: .5; cursor: default; }
+.ai svg { width: 16px; height: 16px; flex: none; }
+.ai.busy svg { animation: spin 1.1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.out { display: grid; gap: 12px; }
+.out .pv { display: grid; place-items: center; background: var(--field); border-radius: 16px; box-shadow: inset 0 0 0 1px var(--line); padding: 18px; }
+.out img { max-width: 100%; max-height: 520px; border-radius: 6px; box-shadow: 0 10px 30px -12px rgba(0,0,0,.35); display: block; }
+.tune { display: grid; gap: 14px; padding: 16px; border-radius: 14px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { border: 0; background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--fg); padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--fg); color: var(--bg); box-shadow: none; }
+.tune-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 400px) { .tune-row { grid-template-columns: 1fr; } }
+.tune label { display: grid; gap: 6px; font-size: 12px; font-weight: 500; color: var(--muted); min-width: 0; }
+.tune label output { font-family: var(--mono); color: var(--fg); font-variant-numeric: tabular-nums; }
+.tune select, .tune input[type="text"] { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 15px; color: var(--fg); }
+.tune input[type="range"] { width: 100%; accent-color: var(--fg); }
+.tune .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg); }
+.tune .check input { width: 18px; height: 18px; accent-color: var(--fg); }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+.verdict { font-family: var(--mono); font-size: 12px; margin: 0; }
+.verdict.ok { color: var(--ok); }
+.verdict.warn { color: var(--warn); }
+
+.partner { display: block; text-align: center; padding: 14px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line); color: var(--fg); text-decoration: none; font-weight: 500; font-size: 14px; }
+.partner:hover { box-shadow: inset 0 0 0 1px var(--fg); }
+.promise { font-size: 12px; color: var(--muted); text-align: center; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .ai.busy svg { animation: none; } .field input, .field textarea, .dl { transition: none; } }
+</style>
+
+<main class="app">
+  <div class="mark"><span class="brand">Načti<em>.me</em></span><span>BrosWars Studio</span></div>
+
+  <div class="code">
+    <canvas id="cv" aria-hidden="true"></canvas>
+    <img id="img" alt="QR kód">
+    <div class="idle" id="idle" hidden>Začněte psát</div>
+  </div>
+  <div class="caption" aria-live="polite"><b id="kind"></b><span id="summary"></span></div>
+
+  <section class="block" aria-label="Obsah kódu">
+    <div class="modes" role="group" aria-label="Druh obsahu">
+      <button type="button" data-mode="any" aria-pressed="true">Cokoli</button>
+      <button type="button" data-mode="wifi" aria-pressed="false">Wi-Fi</button>
+      <button type="button" data-mode="card" aria-pressed="false">Kontakt</button>
+      <button type="button" data-mode="pay" aria-pressed="false">Platba</button>
+    </div>
+    <div class="field" id="field"></div>
+    <p class="err" id="err" hidden></p>
+    <div class="row">
+      <div class="inks" role="group" aria-label="Barva kódu" id="inks"></div>
+      <span class="check-line" id="minSize"></span>
+    </div>
+    <div class="save">
+      <button type="button" class="dl" id="dlPng" disabled>Stáhnout QR kód</button>
+      <button type="button" class="dl alt" id="dlSvg" disabled aria-label="Stáhnout jako SVG pro tisk">SVG</button>
+    </div>
+  </section>
+
+  <section class="print" aria-labelledby="printTitle">
+    <h2 id="printTitle">Vytisknout <span>Navrhne AI</span></h2>
+    <div class="formats" role="group" aria-label="Co vytisknout" id="formats"></div>
+    <button type="button" class="ai" id="aiBtn" disabled>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0l1.6 4.8L14.4 6.4 9.6 8 8 12.8 6.4 8 1.6 6.4 6.4 4.8zM13 10l.7 2.3L16 13l-2.3.7L13 16l-.7-2.3L10 13l2.3-.7z"/></svg>
+      <span id="aiLabel">Navrhnout s AI</span>
+    </button>
+    <div class="out" id="out" hidden>
+      <div class="pv"><img id="pImg" alt="Náhled tiskoviny"></div>
+      <p class="verdict" id="verdict"></p>
+      <div class="save">
+        <button type="button" class="dl" id="dlPrint">Stáhnout pro tisk</button>
+        <button type="button" class="dl alt" id="againBtn">Jiný návrh</button>
+      </div>
+      <a class="partner" id="partner" href="#" target="_blank" rel="noopener sponsored" hidden>Nechte si to vytisknout profesionálně →</a>
+      <div class="tune">
+        <label for="tHead" id="tHeadWrap">Nadpis<input type="text" id="tHead" maxlength="40"></label>
+        <div class="chips" id="tLayout" role="group" aria-label="Styl"></div>
+        <div class="tune-row">
+          <label for="tDisplay">Písmo nadpisu<select id="tDisplay"></select></label>
+          <label for="tText">Písmo údajů a čísel<select id="tText"></select></label>
+        </div>
+        <div class="tune-row">
+          <label for="tName">Velikost nadpisu <output id="tNameV">100 %</output><input type="range" id="tName" min="60" max="140" step="5" value="100"></label>
+          <label for="tSize">Velikost údajů <output id="tSizeV">100 %</output><input type="range" id="tSize" min="70" max="140" step="5" value="100"></label>
+        </div>
+        <label class="check" for="tUpper"><input type="checkbox" id="tUpper"> Nadpis velkými písmeny</label>
+      </div>
+      <p class="note" id="pNote"></p>
+    </div>
+  </section>
+
+  <p class="promise">Obsah je uložený přímo v kódu. Kód funguje navždy, bez účtu a bez předplatného.</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (window.qrcode && qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs['UTF-8']) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+
+  // ================= Nastavení =================
+  // Partnerský (affiliate) odkaz na tiskárnu. Po registraci v partnerském programu sem vložte svůj odkaz – tlačítko se samo zobrazí.
+  const PRINT_PARTNER_URL = '';
+  if (PRINT_PARTNER_URL) { const a = $('partner'); a.href = PRINT_PARTNER_URL; a.hidden = false; }
+
+  // ================= Stav =================
+  const INKS = [['Černá', '#111113'], ['Indigo', '#3730a3'], ['Lesní', '#14532d'], ['Bordó', '#7f1d1d'], ['Oceán', '#0c4a6e']];
+  let ink = INKS[0][1], mode = 'any', current = null, prev = null;
+  const values = {
+    any: 'broswars.cz',
+    wifi: { ssid: '', pass: '' },
+    card: { name: '', title: '', org: '', tel: '', email: '', web: '', addr: '' },
+    pay: { acc: '', amount: '', vs: '', msg: '' },
+  };
+
+  // ================= Formáty obsahu =================
+  const wEsc = (s) => s.replace(/([\\;,:"])/g, '\\$1');
+  const vEsc = (s) => s.replace(/\\/g, '\\\\').replace(/([,;])/g, '\\$1');
+  const webUrl = (w) => (/^https?:\/\//i.test(w) ? w : 'https://' + w);
+  const fmtPhone = (p) => {
+    const d = (p || '').replace(/[^\d+]/g, ''); if (!d) return '';
+    const plus = d.startsWith('+'), digits = d.replace(/\+/g, ''), g = (s) => s.replace(/(\d{3})(?=\d)/g, '$1 ');
+    if (plus && digits.startsWith('420') && digits.length === 12) return '+420 ' + g(digits.slice(3));
+    if (!plus && digits.length === 9) return g(digits);
+    return (plus ? '+' : '') + g(digits);
+  };
+  const fmtWeb = (w) => (w || '').trim().replace(/^https?:\/\//i, '').replace(/\/$/, '').toLowerCase();
+  const fmtMoney = (n) => n.toLocaleString('cs-CZ', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }) + ' Kč';
+
+  // České číslo účtu → IBAN (s kontrolou podle ČNB)
+  function toIban(raw) {
+    const a = raw.replace(/\s+/g, '').toUpperCase();
+    if (/^CZ\d{22}$/.test(a)) {
+      const r = BigInt(a.slice(4) + '1235' + a.slice(2, 4)) % 97n;
+      return r === 1n ? { iban: a } : { error: 'IBAN nemá platný kontrolní součet.' };
+    }
+    const m = a.match(/^(?:(\d{1,6})-)?(\d{2,10})\/(\d{4})$/);
+    if (!m) return { error: 'Zadejte účet ve tvaru 123456789/0800 nebo IBAN.' };
+    const pre = (m[1] || '').padStart(6, '0'), num = m[2].padStart(10, '0'), bank = m[3];
+    const w = [6, 3, 7, 9, 10, 5, 8, 4, 2, 1];
+    const ok = (s) => [...s].reduce((sum, c, i) => sum + Number(c) * w[i], 0) % 11 === 0;
+    if (!ok(pre.padStart(10, '0')) || !ok(num)) return { error: 'Číslo účtu nesedí. Zkontrolujte překlep.' };
+    const bban = bank + pre + num;
+    const ck = String(98n - (BigInt(bban + '123500') % 97n)).padStart(2, '0');
+    return { iban: 'CZ' + ck + bban };
+  }
+
+  function detect() {
+    if (mode === 'wifi') {
+      const { ssid, pass } = values.wifi;
+      if (!ssid.trim()) return null;
+      return { kind: 'Wi-Fi', summary: ssid, data: pass ? `WIFI:T:WPA;S:${wEsc(ssid)};P:${wEsc(pass)};;` : `WIFI:T:nopass;S:${wEsc(ssid)};;`,
+        details: [['Síť', ssid], ...(pass ? [['Heslo', pass]] : [])] };
+    }
+    if (mode === 'card') {
+      const c = values.card, t = (k) => (c[k] || '').trim();
+      if (!t('name') && !t('org') && !t('tel') && !t('email')) return null;
+      const parts = t('name').split(/\s+/).filter(Boolean);
+      const last = parts.length > 1 ? parts.pop() : '';
+      const display = t('name') || t('org') || t('email') || t('tel');
+      const L = ['BEGIN:VCARD', 'VERSION:3.0', `N:${vEsc(last)};${vEsc(parts.join(' '))};;;`, `FN:${vEsc(display)}`];
+      if (t('org')) L.push('ORG:' + vEsc(t('org')));
+      if (t('title')) L.push('TITLE:' + vEsc(t('title')));
+      if (t('tel')) L.push('TEL;TYPE=CELL:' + t('tel').replace(/[^\d+]/g, ''));
+      if (t('email')) L.push('EMAIL;TYPE=INTERNET:' + t('email'));
+      if (t('web')) L.push('URL:' + webUrl(t('web')));
+      if (t('addr')) L.push('ADR;TYPE=WORK:;;' + vEsc(t('addr')) + ';;;;');
+      L.push('END:VCARD');
+      const details = [['T', fmtPhone(t('tel'))], ['E', t('email')], ['W', fmtWeb(t('web'))], ['A', t('addr')]].filter((r) => r[1]);
+      return { kind: 'Kontakt', summary: display, data: L.join('\r\n'), details, headline: display };
+    }
+    if (mode === 'pay') {
+      const p = values.pay;
+      if (!p.acc.trim()) return null;
+      const r = toIban(p.acc);
+      if (r.error) return { error: r.error, field: 'acc' };
+      let am = '';
+      if (p.amount.trim()) {
+        const n = Number(p.amount.replace(/\s/g, '').replace(',', '.'));
+        if (!isFinite(n) || n <= 0 || n > 9999999) return { error: 'Částka musí být kladné číslo.', field: 'amount' };
+        am = n.toFixed(2);
+      }
+      const vs = p.vs.replace(/\D/g, '').slice(0, 10);
+      const msg = p.msg.replace(/\*/g, '').trim().slice(0, 60);
+      const data = `SPD*1.0*ACC:${r.iban}${am ? '*AM:' + am : ''}*CC:CZK${vs ? '*X-VS:' + vs : ''}${msg ? '*MSG:' + msg : ''}`;
+      const money = am ? fmtMoney(Number(am)) : '';
+      return { kind: 'Platba', summary: money ? `${money} · ${p.acc.trim()}` : p.acc.trim(), data, amount: money,
+        details: [...(money ? [['Částka', money]] : []), ['Účet', p.acc.trim()], ...(vs ? [['VS', vs]] : []), ...(msg ? [['Zpráva', msg]] : [])] };
+    }
+    const v = values.any.trim();
+    if (!v) return null;
+    if (/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v)) return { kind: 'E-mail', summary: v, data: 'mailto:' + v, details: [['E-mail', v]] };
+    if (/^\+?[\d\s().-]+$/.test(v) && v.replace(/\D/g, '').length >= 6) { const p = v.replace(/[^\d+]/g, ''); return { kind: 'Telefon', summary: fmtPhone(p), data: 'tel:' + p, details: [['Telefon', fmtPhone(p)]] }; }
+    if (/^https?:\/\/\S+$/i.test(v)) return { kind: 'Odkaz', summary: fmtWeb(v), data: v, details: [['Web', fmtWeb(v)]] };
+    if (/^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(:\d+)?([/?#]\S*)?$/i.test(v)) return { kind: 'Odkaz', summary: fmtWeb(v), data: 'https://' + v, details: [['Web', fmtWeb(v)]] };
+    return { kind: 'Text', summary: v.replace(/\s+/g, ' '), data: values.any, details: [] };
+  }
+
+  // ================= QR kód na obrazovce =================
+  const cv = $('cv'), ctx = cv.getContext('2d'), img = $('img');
+  let anim = 0, exportTimer, pngCanvas = null;
+
+  function matrix(data, ecl) {
+    const qr = qrcode(0, ecl || 'M'); qr.addData(data, 'Byte'); qr.make();
+    const n = qr.getModuleCount(), m = new Uint8Array(n * n);
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) m[r * n + c] = qr.isDark(r, c) ? 1 : 0;
+    return { n, m };
+  }
+  function sizeCanvas() {
+    const px = Math.round(cv.getBoundingClientRect().width * Math.min(window.devicePixelRatio || 1, 3));
+    if (px && cv.width !== px) cv.width = cv.height = px;
+  }
+  function drawQr(next, t) {
+    sizeCanvas();
+    const W = cv.width; ctx.clearRect(0, 0, W, W); ctx.fillStyle = ink;
+    const n = next.n, cell = W / n, mid = (n - 1) / 2, maxD = Math.hypot(mid, mid), same = prev && prev.n === n;
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      const on = next.m[r * n + c], was = same ? prev.m[r * n + c] : 0;
+      if (!on && !was) continue;
+      let s = 1;
+      if (on !== was || !same) {
+        const k = Math.min(1, Math.max(0, (t - (Math.hypot(r - mid, c - mid) / maxD) * 0.55) / 0.45));
+        const e = 1 - Math.pow(1 - k, 3); s = on ? e : 1 - e;
+      }
+      if (s <= 0.01) continue;
+      const size = cell * s, off = (cell - size) / 2;
+      ctx.fillRect(Math.floor(c * cell + off), Math.floor(r * cell + off), Math.ceil(size), Math.ceil(size));
+    }
+  }
+  function exportPng(next) {
+    const quiet = 4, total = next.n + quiet * 2, scale = Math.ceil(1200 / total);
+    const c = document.createElement('canvas'); c.width = c.height = total * scale;
+    const x = c.getContext('2d'); x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height); x.fillStyle = ink;
+    for (let r = 0; r < next.n; r++) for (let col = 0; col < next.n; col++) if (next.m[r * next.n + col]) x.fillRect((col + quiet) * scale, (r + quiet) * scale, scale, scale);
+    img.src = c.toDataURL('image/png'); img.classList.add('ready');
+    pngCanvas = c; setSaveEnabled(true);
+  }
+  function svgOf(next) {
+    const q = 4, t = next.n + q * 2; let d = '';
+    for (let r = 0; r < next.n; r++) for (let c = 0; c < next.n; c++) if (next.m[r * next.n + c]) d += `M${c + q} ${r + q}h1v1h-1z`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" width="1024" height="1024" shape-rendering="crispEdges"><rect width="${t}" height="${t}" fill="#ffffff"/><path fill="${ink}" d="${d}"/></svg>`;
+  }
+  function show(next) {
+    cancelAnimationFrame(anim); clearTimeout(exportTimer);
+    img.classList.remove('ready'); setSaveEnabled(false);
+    if (reduce) { drawQr(next, 1); prev = next; exportPng(next); return; }
+    const start = performance.now(), from = prev;
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / 420);
+      prev = from; drawQr(next, t);
+      if (t < 1) anim = requestAnimationFrame(step);
+      else { prev = next; exportTimer = setTimeout(() => exportPng(next), 60); }
+    };
+    anim = requestAnimationFrame(step);
+  }
+  function clearQr(msg) {
+    cancelAnimationFrame(anim); ctx.clearRect(0, 0, cv.width, cv.height); img.classList.remove('ready'); prev = null;
+    $('idle').hidden = false; $('idle').textContent = msg;
+  }
+
+  // Minimální velikost tisku: modul aspoň 0,4 mm, okraj 4 moduly
+  const minPrintCm = (n) => ((n + 8) * 0.4 / 10);
+  const cm = (v) => v.toLocaleString('cs-CZ', { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + ' cm';
+
+  function update() {
+    const d = detect();
+    current = d && !d.error ? d : null;
+    setSaveEnabled(false);
+    $('err').hidden = !(d && d.error); $('err').textContent = d && d.error ? d.error : '';
+    $('field').querySelectorAll('[data-k]').forEach((el) => el.setAttribute('aria-invalid', String(!!(d && d.error && d.field === el.dataset.k))));
+    $('kind').textContent = current ? current.kind : '';
+    $('summary').textContent = current ? current.summary : '';
+    $('aiBtn').disabled = !current || busy;
+    $('minSize').textContent = ''; $('minSize').className = 'check-line';
+    renderFormats();
+    if (!window.qrcode) return clearQr('Generátor se nenačetl. Obnovte stránku.');
+    if (!current) return clearQr(mode === 'any' ? 'Začněte psát' : 'Vyplňte údaje');
+    let next;
+    try { next = matrix(current.data); } catch (e) { current = null; return clearQr('Na jeden kód je to příliš dlouhé'); }
+    $('idle').hidden = true;
+    img.alt = `QR kód: ${current.kind} – ${current.summary}`;
+    $('minSize').textContent = `Tisk od ${cm(minPrintCm(next.n))}`; $('minSize').className = 'check-line ok';
+    show(next);
+    if (design && $('out').hidden === false) schedulePrint();
+  }
+
+  // ================= Stažení =================
+  let downloads = null;
+  const anchorSave = { save: async ({ filename, data }) => {
+    const blob = data instanceof Blob ? data : new Blob([data], { type: filename.endsWith('.svg') ? 'image/svg+xml' : 'application/octet-stream' });
+    const Cap = window.Capacitor;
+    if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins.Filesystem && Cap.Plugins.Share) {
+      // Mobilní aplikace: uložit do mezipaměti a otevřít nabídku sdílení (Fotky, Soubory, tisk…)
+      const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(blob); });
+      const { uri } = await Cap.Plugins.Filesystem.writeFile({ path: filename, data: b64, directory: 'CACHE' });
+      await Cap.Plugins.Share.share({ title: filename, files: [uri] });
+      return { status: 'saved' };
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    return { status: 'saved' };
+  } };
+  if (window.claude && claude.use) claude.use('downloads').then((d) => { downloads = d; }).catch(() => {});
+  else downloads = anchorSave;
+
+  function setSaveEnabled(on) { $('dlPng').disabled = !on; $('dlSvg').disabled = !on; }
+  const slug = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^https?:\/\//, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  async function saveFile(btn, filename, getData, onFail) {
+    if (!downloads) { onFail('Na telefonu podržte prst na obrázku a zvolte Uložit obrázek.'); return; }
+    const label = btn.textContent;
+    try {
+      await downloads.save({ filename, data: await getData() });
+      btn.textContent = 'Staženo ✓'; setTimeout(() => (btn.textContent = label), 1600);
+    } catch (e) {
+      const code = e && e.code;
+      if (code === 'declined') return;
+      if (code === 'rate_limited') { btn.textContent = 'Chvilku…'; setTimeout(() => (btn.textContent = label), 1600); return; }
+      onFail('Stažení se nepovedlo. Podržte prst na obrázku a zvolte Uložit obrázek.');
+    }
+  }
+  const toBlob = (c) => new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('blob'))), 'image/png'));
+  const qrName = () => 'qr-' + (slug(current && current.summary) || 'kod');
+  $('dlPng').addEventListener('click', () => saveFile($('dlPng'), qrName() + '.png', () => toBlob(pngCanvas), showErr));
+  $('dlSvg').addEventListener('click', () => saveFile($('dlSvg'), qrName() + '.svg', () => svgOf(prev), showErr));
+  function showErr(m) { $('err').hidden = false; $('err').textContent = m; }
+
+  // ================= Pole =================
+  const FIELDS = {
+    wifi: [['ssid', 'Název sítě', 'text'], ['pass', 'Heslo', 'text']],
+    card: [['name', 'Jméno a příjmení', 'text', 'wide'], ['title', 'Pozice', 'text'], ['org', 'Firma', 'text'],
+      ['tel', 'Telefon', 'tel'], ['email', 'E-mail', 'email'], ['web', 'Web', 'url', 'wide'], ['addr', 'Adresa', 'text', 'wide']],
+    pay: [['acc', 'Číslo účtu (123456789/0800)', 'text', 'wide num'], ['amount', 'Částka v Kč', 'text', 'num', 'decimal'], ['vs', 'Variabilní symbol', 'text', 'num', 'numeric'], ['msg', 'Zpráva pro příjemce', 'text', 'wide']],
+  };
+  function grow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, 160) + 'px'; }
+  function renderField() {
+    const f = $('field');
+    if (mode === 'any') {
+      f.className = 'field';
+      f.innerHTML = '<textarea id="in-any" rows="1" aria-label="Obsah kódu" placeholder="Odkaz, text, e-mail nebo telefon" spellcheck="false" autocapitalize="off"></textarea>';
+      const t = $('in-any'); t.value = values.any; grow(t);
+      t.addEventListener('input', () => { values.any = t.value; grow(t); update(); });
+      t.addEventListener('focus', function once() { if (t.value === 'broswars.cz') t.select(); t.removeEventListener('focus', once); });
+      return;
+    }
+    const defs = FIELDS[mode];
+    f.className = defs.length > 2 ? 'field grid2' : 'field';
+    f.innerHTML = defs.map(([k, l, t, cls, im]) => `<input id="in-${mode}-${k}" class="${cls || ''}" data-k="${k}" type="${t}" ${im ? `inputmode="${im}"` : ''} aria-label="${l}" placeholder="${l}" autocomplete="off" spellcheck="false">`).join('');
+    f.querySelectorAll('input').forEach((i) => { i.value = values[mode][i.dataset.k]; i.addEventListener('input', () => { values[mode][i.dataset.k] = i.value; update(); }); });
+  }
+  document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('[data-mode]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    renderField();
+    if (format === 'card' && mode !== 'card') format = 'a6';
+    if (mode === 'card') format = 'card';
+    design = null; $('out').hidden = true; resetAiLabel();
+    update();
+    const first = $('field').querySelector('input'); if (first) first.focus();
+  }));
+  $('inks').innerHTML = INKS.map(([n, c], i) => `<button type="button" style="--c:${c}" aria-label="${n}" aria-pressed="${i === 0}" data-ink="${c}"></button>`).join('');
+  $('inks').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    ink = b.dataset.ink;
+    $('inks').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    if (prev) { cancelAnimationFrame(anim); drawQr(prev, 1); exportPng(prev); }
+  }));
+  window.addEventListener('resize', () => { if (prev) drawQr(prev, 1); });
+
+  // ================= Tisk =================
+  const FORMATS = {
+    card:    { name: 'Vizitka', size: '85×55 mm', W: 2008, H: 1300, mm: 85, icon: [26, 17], layouts: ['monogram', 'editorial', 'ticket', 'swiss', 'aura', 'split'] },
+    a6:      { name: 'Kartička A6', size: '105×148 mm', W: 1240, H: 1748, mm: 105, icon: [15, 21], layouts: ['editorial', 'block', 'frame', 'aura'] },
+    sticker: { name: 'Samolepka', size: '50×50 mm', W: 1182, H: 1182, mm: 50, icon: [18, 18], layouts: ['badge', 'ring'] },
+  };
+  const LAYOUT_NAMES = { monogram: 'Monogram', editorial: 'Editorial', ticket: 'Vstupenka', swiss: 'Švýcarský', aura: 'Aura', split: 'Dělený', block: 'Blok', frame: 'Rámeček', badge: 'Odznak', ring: 'Rám' };
+  const LAYOUT_HINTS = {
+    monogram: 'obří iniciály přesahující přes okraj', editorial: 'časopisecký styl, velký nadpis, tenká linka', ticket: 'vstupenka s odtrhávací částí pro QR',
+    swiss: 'švýcarský styl, nadpis svisle, přísná mřížka', aura: 'měkký barevný přechod se zrnem, QR na skleněném panelu', split: 'barevný pruh s QR, text vlevo',
+    block: 'horní barevný blok s nadpisem, QR přes hranu', frame: 'elegantní rámeček, vše na střed, rohové značky kolem QR',
+    badge: 'barevný čtverec s bílým polem pro QR a nadpisem dole', ring: 'bílá samolepka se silným barevným rámem a výzvou nahoře',
+  };
+  const DISPLAY = {
+    'Fraunces': { w: 600, it: true, fb: 'Georgia, serif' }, 'Bodoni Moda': { w: 800, it: true, fb: 'Didot, Georgia, serif' },
+    'Instrument Serif': { w: 400, it: true, fb: 'Georgia, serif' }, 'Unbounded': { w: 800, it: false, fb: 'system-ui, sans-serif' },
+    'Syne': { w: 800, it: false, fb: 'system-ui, sans-serif' }, 'Bricolage Grotesque': { w: 800, it: false, fb: 'system-ui, sans-serif' },
+  };
+  const TEXT = { 'Geist': { w: 500, fb: 'system-ui, sans-serif' }, 'Manrope': { w: 500, fb: 'system-ui, sans-serif' }, 'DM Mono': { w: 400, fb: 'ui-monospace, monospace' } };
+  const PRESETS = [
+    { bg: '#f2efe8', ink: '#16130f', accent: '#d9cbb0', accent2: '#8a6d3b', display: 'Bodoni Moda', text: 'Geist', upper: false },
+    { bg: '#ffffff', ink: '#0d0d0f', accent: '#e4572e', accent2: '#e4572e', display: 'Fraunces', text: 'DM Mono', upper: false },
+    { bg: '#1b1530', ink: '#ffffff', accent: '#7c5cff', accent2: '#ff7a59', display: 'Unbounded', text: 'Manrope', upper: true },
+    { bg: '#f5f5f0', ink: '#111111', accent: '#d7261e', accent2: '#111111', display: 'Bricolage Grotesque', text: 'Geist', upper: false },
+    { bg: '#0f1d17', ink: '#ecf2ea', accent: '#b8d8a8', accent2: '#b8d8a8', display: 'Instrument Serif', text: 'DM Mono', upper: false },
+    { bg: '#0e1116', ink: '#f4f2ec', accent: '#c9a45c', accent2: '#c9a45c', display: 'Syne', text: 'Manrope', upper: true },
+  ];
+  const DEFAULT_HEAD = { 'Odkaz': 'Navštivte nás', 'Text': 'Naskenujte', 'E-mail': 'Napište nám', 'Telefon': 'Zavolejte nám', 'Wi-Fi': 'Wi-Fi pro hosty', 'Platba': 'Zaplaťte QR platbou', 'Kontakt': '' };
+
+  let format = 'a6', design = null, busy = false, printCanvas = null, sample = null, presetIdx = 0;
+  const used = { card: [], a6: [], sticker: [] };
+  if (window.claude && claude.use) claude.use('sample').then((s) => { sample = s; resetAiLabel(); }).catch(() => {});
+  function resetAiLabel() { $('aiLabel').textContent = sample ? 'Navrhnout s AI' : 'Navrhnout'; }
+  resetAiLabel();
+
+  function renderFormats() {
+    const list = mode === 'card' ? ['card', 'a6', 'sticker'] : ['a6', 'sticker'];
+    if (!list.includes(format)) format = list[0];
+    const html = list.map((k) => { const f = FORMATS[k]; return `<button type="button" data-f="${k}" aria-pressed="${k === format}"><i style="width:${f.icon[0]}px;height:${f.icon[1]}px"></i>${f.name}<small>${f.size}</small></button>`; }).join('');
+    if ($('formats').dataset.sig !== list.join() + format) {
+      $('formats').innerHTML = html; $('formats').dataset.sig = list.join() + format;
+      $('formats').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+        if (format === b.dataset.f) return;
+        format = b.dataset.f; renderFormats();
+        if (design) { design = adaptDesign(design); syncTune(); renderPrint(); }
+      }));
+    }
+  }
+
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const rgba = (h, a) => `rgba(${parseInt(h.slice(1, 3), 16)},${parseInt(h.slice(3, 5), 16)},${parseInt(h.slice(5, 7), 16)},${a})`;
+  const mix = (a, b, t) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('');
+  const on = (bg) => (ratio('#111113', bg) >= ratio('#ffffff', bg) ? '#111113' : '#ffffff');
+
+  function cleanDesign(d) {
+    d = d || {};
+    const o = {
+      layout: d.layout, bg: HEX.test(d.bg) ? d.bg : '#ffffff', ink: HEX.test(d.ink) ? d.ink : '#111113',
+      accent: HEX.test(d.accent) ? d.accent : '#4338ca', accent2: HEX.test(d.accent2) ? d.accent2 : (HEX.test(d.accent) ? d.accent : '#4338ca'),
+      display: DISPLAY[d.display] ? d.display : 'Fraunces', text: TEXT[d.text] ? d.text : 'Geist', upper: !!d.upper,
+      headline: typeof d.headline === 'string' ? d.headline.trim().replace(/\s+/g, ' ').slice(0, 40) : '',
+      tagline: typeof d.tagline === 'string' ? d.tagline.trim().replace(/\s+/g, ' ').slice(0, 44) : '',
+      nameScale: d.nameScale || 1, textScale: d.textScale || 1,
+    };
+    if (ratio(o.ink, o.bg) < 7) o.ink = lum(o.bg) > 0.3 ? '#111113' : '#f6f5f1';
+    return adaptDesign(o);
+  }
+  function adaptDesign(d) {
+    const L = FORMATS[format].layouts;
+    if (!L.includes(d.layout)) d = { ...d, layout: L.find((l) => !used[format].includes(l)) || L[0] };
+    if (!d.headline && current) d = { ...d, headline: current.headline || DEFAULT_HEAD[current.kind] || '' };
+    return d;
+  }
+
+  async function aiDesign() {
+    const L = FORMATS[format].layouts, avoid = used[format].slice(-3);
+    const ctxInfo = mode === 'card'
+      ? { jmeno: values.card.name, pozice: values.card.title, firma: values.card.org, web: values.card.web }
+      : { druh: current.kind, obsah: mode === 'wifi' ? 'síť ' + values.wifi.ssid : current.summary };
+    const prompt = `Jsi špičkový grafický designér se zkušenostmi z předních studií. Navrhni odvážnou, kreativní a profesionální tiskovinu: ${FORMATS[format].name} (${FORMATS[format].size}) s QR kódem.
+Kontext: ${JSON.stringify(ctxInfo)}
+Rozvržení k výběru: ${L.map((l) => `${l} (${LAYOUT_HINTS[l]})`).join('; ')}.
+${avoid.length ? 'NEPOUŽÍVEJ rozvržení: ' + avoid.join(', ') + '.' : ''}
+Písma pro nadpis: ${Object.keys(DISPLAY).join(', ')}. Písma pro údaje: ${Object.keys(TEXT).join(', ')}.
+Barvy: žádná klišé, paleta jako od designového studia. Text (ink) musí mít s pozadím (bg) kontrast aspoň 7:1.
+${mode === 'card' ? 'headline = jméno osoby beze změny. tagline = krátký slogan česky do 36 znaků podle oboru, nebo prázdný.' : 'headline = krátká, výstižná česká výzva do 28 znaků, co má člověk udělat (např. „Připojte se k Wi-Fi“). tagline = doplňující věta česky do 40 znaků, nebo prázdný.'}
+Odpověz POUZE JSON objektem:
+{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"headline":"…","tagline":"…"}
+Nevymýšlej žádné kontaktní ani platební údaje.`;
+    return sample.json(prompt, { modelTier: 'default', cache: false });
+  }
+
+  async function designPrint() {
+    if (busy || !current) return;
+    busy = true; $('aiBtn').disabled = true; $('againBtn').disabled = true; $('aiBtn').classList.add('busy');
+    $('aiLabel').textContent = sample ? 'AI navrhuje…' : 'Navrhuji…';
+    if (used[format].length >= FORMATS[format].layouts.length) used[format].length = 0;
+    let d = null, note = '';
+    if (sample) {
+      try { d = await aiDesign(); note = 'Návrh od AI.'; }
+      catch (e) { note = e && e.code === 'rate_limited' ? 'AI je vytížená, použil jsem připravený styl.' : 'AI teď není k dispozici, použil jsem připravený styl.'; d = null; }
+    }
+    if (!d) d = { ...PRESETS[presetIdx++ % PRESETS.length], layout: FORMATS[format].layouts.find((l) => !used[format].includes(l)) };
+    if (mode === 'card') d.headline = current.headline;
+    const keep = design ? { nameScale: design.nameScale, textScale: design.textScale } : {};
+    d = cleanDesign({ ...d, ...keep });
+    if (used[format].slice(-1)[0] === d.layout) d.layout = FORMATS[format].layouts.find((l) => !used[format].includes(l)) || d.layout;
+    used[format].push(d.layout);
+    design = d; syncTune();
+    await renderPrint();
+    $('pNote').textContent = `${note ? note + ' ' : ''}Vše upravíte níže. Tisková kvalita ${format === 'a6' ? 300 : 600} DPI.`;
+    busy = false; $('aiBtn').disabled = !current; $('againBtn').disabled = false; $('aiBtn').classList.remove('busy');
+    $('aiLabel').textContent = sample ? 'Navrhnout znovu s AI' : 'Další návrh';
+  }
+  $('aiBtn').addEventListener('click', designPrint);
+  $('againBtn').addEventListener('click', designPrint);
+
+  // ---- Ovládání ----
+  $('tDisplay').innerHTML = Object.keys(DISPLAY).map((f) => `<option value="${f}" style="font-family:'${f}'">${f}</option>`).join('');
+  $('tText').innerHTML = Object.keys(TEXT).map((f) => `<option value="${f}" style="font-family:'${f}'">${f}</option>`).join('');
+  function syncTune() {
+    const d = design; if (!d) return;
+    $('tLayout').innerHTML = FORMATS[format].layouts.map((l) => `<button type="button" data-l="${l}" aria-pressed="${l === d.layout}">${LAYOUT_NAMES[l]}</button>`).join('');
+    $('tLayout').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => tweak({ layout: b.dataset.l })));
+    $('tDisplay').value = d.display; $('tText').value = d.text; $('tUpper').checked = !!d.upper;
+    $('tName').value = Math.round(d.nameScale * 100); $('tSize').value = Math.round(d.textScale * 100);
+    $('tNameV').textContent = $('tName').value + ' %'; $('tSizeV').textContent = $('tSize').value + ' %';
+    $('tHeadWrap').hidden = mode === 'card';
+    if (document.activeElement !== $('tHead')) $('tHead').value = d.headline || '';
+  }
+  let tweakTimer;
+  function tweak(patch) { if (!design) return; design = { ...design, ...patch }; syncTune(); schedulePrint(); }
+  function schedulePrint() { clearTimeout(tweakTimer); tweakTimer = setTimeout(renderPrint, 40); }
+  $('tDisplay').addEventListener('change', (e) => tweak({ display: e.target.value }));
+  $('tText').addEventListener('change', (e) => tweak({ text: e.target.value }));
+  $('tName').addEventListener('input', (e) => tweak({ nameScale: e.target.value / 100 }));
+  $('tSize').addEventListener('input', (e) => tweak({ textScale: e.target.value / 100 }));
+  $('tUpper').addEventListener('change', (e) => tweak({ upper: e.target.checked }));
+  $('tHead').addEventListener('input', (e) => tweak({ headline: e.target.value }));
+
+  $('dlPrint').addEventListener('click', () => {
+    if (!printCanvas) return;
+    const name = `${slug(FORMATS[format].name)}-${slug((design && design.headline) || (current && current.summary)) || 'qr'}.png`;
+    saveFile($('dlPrint'), name, () => toBlob(printCanvas), (m) => { $('pNote').textContent = m; });
+  });
+
+  // ---- Kreslení tiskovin ----
+  function setFont(x, w, size, fam, fb, it) { x.font = `${it ? 'italic ' : ''}${w} ${Math.round(size)}px "${fam}", ${fb}`; }
+  function widthOf(x, t, tr) { return x.measureText(t).width + (tr ? tr * ([...t].length - 1) : 0); }
+  function txt(x, t, X, Y, tr, align) {
+    tr = tr || 0; align = align || 'left';
+    const w = widthOf(x, t, tr);
+    let cx = align === 'center' ? X - w / 2 : align === 'right' ? X - w : X;
+    if (!tr) { x.fillText(t, cx, Y); return w; }
+    for (const ch of t) { x.fillText(ch, cx, Y); cx += x.measureText(ch).width + tr; }
+    return w;
+  }
+  function fitSize(x, t, maxW, start, min, set, tr) { let s = start; for (; s > min; s -= 2) { set(s); if (widthOf(x, t, tr ? tr(s) : 0) <= maxW) break; } set(s); return s; }
+  function wrap(x, t, maxW, maxLines) {
+    const words = t.split(' '), lines = []; let line = '';
+    for (const w of words) { const test = line ? line + ' ' + w : w; if (widthOf(x, test) <= maxW || !line) line = test; else { lines.push(line); line = w; } }
+    if (line) lines.push(line);
+    return lines.length > maxLines ? null : lines;
+  }
+  function fitWrap(x, t, maxW, start, min, lines, set) {
+    let s = start;
+    for (; s > min; s -= 3) { set(s); const r = wrap(x, t, maxW, lines); if (r && r.every((l) => widthOf(x, l) <= maxW)) return { s, lines: r }; }
+    set(min); return { s: min, lines: wrap(x, t, maxW, 99) || [t] };
+  }
+  function roundRect(x, X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); }
+
+  async function loadFonts(d) {
+    const D = DISPLAY[d.display], Tx = TEXT[d.text], s = 'ĚŠČŘŽÝÁÍÉÚŮěščřžýáíéúů+0123456789@.Kč';
+    const jobs = [`${D.w} 100px "${d.display}"`, `400 100px "${d.display}"`, `${Tx.w} 40px "${d.text}"`, `600 40px "${d.text}"`, '500 30px "DM Mono"'];
+    if (D.it) jobs.push(`italic 400 60px "${d.display}"`);
+    try { await Promise.all(jobs.map((f) => document.fonts.load(f, s))); } catch (e) {}
+  }
+
+  let renderToken = 0, lastQrMm = 0, lastModMm = 0;
+  async function renderPrint() {
+    if (!design || !current) return;
+    const tok = ++renderToken;
+    await loadFonts(design);
+    if (tok !== renderToken) return;
+    const c = drawPrint(format, design);
+    printCanvas = c;
+    $('pImg').src = c.toDataURL('image/png');
+    $('pImg').alt = `Náhled: ${FORMATS[format].name}`;
+    $('out').hidden = false;
+    const v = $('verdict');
+    const qrCm = (lastQrMm / 10).toLocaleString('cs-CZ', { maximumFractionDigits: 1 });
+    if (lastModMm >= 0.4) { v.className = 'verdict ok'; v.textContent = `● QR na tisku ${qrCm} cm, načte se spolehlivě`; }
+    else if (lastModMm >= 0.3) { v.className = 'verdict warn'; v.textContent = `● QR na tisku ${qrCm} cm, načte se, ale je hustý. Zkraťte obsah, nebo zvolte větší formát.`; }
+    else { v.className = 'verdict warn'; v.textContent = `● QR na tisku ${qrCm} cm je příliš hustý. Zkraťte obsah, nebo zvolte větší formát.`; }
+  }
+
+  function drawPrint(fmt, d) {
+    const F = FORMATS[fmt], W = F.W, H = F.H, ppm = W / F.mm;
+    const cvs = document.createElement('canvas'); cvs.width = W; cvs.height = H;
+    const x = cvs.getContext('2d'); x.textBaseline = 'alphabetic';
+    const D = DISPLAY[d.display], Tx = TEXT[d.text], NS = d.nameScale || 1, TS = d.textScale || 1;
+    const caseIt = (s) => (d.upper ? s.toLocaleUpperCase('cs') : s);
+    const nameTr = (s) => (d.upper ? s * 0.06 : -s * 0.012);
+    const fill = (c) => { x.fillStyle = c; };
+    const setName = (s) => setFont(x, D.w, s, d.display, D.fb, false);
+    const setText = (s, w) => setFont(x, w || Tx.w, s, d.text, Tx.fb, false);
+    const setLabel = (s) => setFont(x, 500, s, 'DM Mono', 'ui-monospace, monospace', false);
+    const setItalic = (s) => setFont(x, D.it ? 400 : Tx.w, s, D.it ? d.display : d.text, D.it ? D.fb : Tx.fb, D.it);
+    const labelColor = (bg) => (ratio(d.accent, bg) >= 3 ? d.accent : rgba(on(bg) === '#ffffff' ? '#ffffff' : '#111113', 0.55));
+    const lightBg = (bg) => lum(bg) > 0.82;
+    const details = current.details || [];
+    let rowsSrc = details;
+    const head = caseIt(d.headline || '');
+
+    function qr(X, Y, S, tile, radius, ecl) {
+      const m = matrix(current.data, ecl || (fmt === 'card' ? 'L' : 'M')), q = tile ? 3 : 0, tot = m.n + q * 2, cell = S / tot;
+      if (tile) { fill('#ffffff'); roundRect(x, X, Y, S, S, radius ?? 26); x.fill(); }
+      fill(ratio(d.ink, '#ffffff') >= 7 ? d.ink : '#111113');
+      for (let r = 0; r < m.n; r++) for (let col = 0; col < m.n; col++) if (m.m[r * m.n + col]) x.fillRect(Math.floor(X + (col + q) * cell), Math.floor(Y + (r + q) * cell), Math.ceil(cell), Math.ceil(cell));
+      lastQrMm = S / ppm; lastModMm = cell / ppm;
+    }
+    function detailRows(X, top, maxW, size, lh, bg, labelW, align, ink) {
+      size *= TS; lh *= TS; labelW = (labelW ?? 64) * TS; ink = ink || d.ink;
+      let y = top;
+      for (const [k, v] of rowsSrc) {
+        if (align === 'center') {
+          setLabel(size * 0.62); const lw = widthOf(x, k.toLocaleUpperCase('cs'), size * 0.12) + size * 0.5;
+          fitSize(x, v, maxW - lw, size, 20, (s) => setText(s)); const vw = widthOf(x, v);
+          const start = X - (lw + vw) / 2;
+          fill(labelColor(bg)); setLabel(size * 0.62); txt(x, k.toLocaleUpperCase('cs'), start, y, size * 0.12);
+          fill(ink); fitSize(x, v, maxW - lw, size, 20, (s) => setText(s)); txt(x, v, start + lw, y);
+        } else {
+          fill(labelColor(bg)); setLabel(size * 0.62); txt(x, k.toLocaleUpperCase('cs'), X, y, size * 0.12);
+          fill(ink); fitSize(x, v, maxW - labelW, size, 20, (s) => setText(s)); txt(x, v, X + labelW, y);
+        }
+        y += lh;
+      }
+      return y;
+    }
+    const rowsH = (lh) => Math.max(0, rowsSrc.length - 1) * lh * TS;
+    const labelW = (size) => { setLabel(size * 0.62 * TS); return Math.max(...details.map(([k]) => widthOf(x, k.toLocaleUpperCase('cs'), size * 0.12 * TS)), 0) + size * 0.7 * TS; };
+
+    fill(d.bg); x.fillRect(0, 0, W, H);
+
+    // ---------------- VIZITKA ----------------
+    if (fmt === 'card') {
+      const P = 112, cd = values.card, T = (k) => (cd[k] || '').trim();
+      const parts = T('name').split(/\s+/).filter(Boolean);
+      const first = parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || T('org'));
+      const last = parts.length > 1 ? parts[parts.length - 1] : '';
+      const full = T('name') || T('org');
+      const initials = (parts.length ? parts.map((p) => p[0]).slice(0, 2).join('') : T('org').slice(0, 2)).toUpperCase();
+      const sub = [T('title'), T('name') ? T('org') : ''].filter(Boolean);
+
+      if (d.layout === 'monogram') {
+        fill(ratio(d.accent, d.bg) < 1.25 ? mix(d.bg, d.ink, 0.12) : d.accent);
+        setName(1240 * NS); const iw = widthOf(x, initials, -14); txt(x, initials, W - iw * 0.82, H + 190, -14);
+        const qS = 400; qr(W - P - qS, H - P - qS, qS, true);
+        fill(d.ink); const maxW = W * 0.56;
+        const ns = fitSize(x, caseIt(full), maxW, 150 * NS, 64, setName, nameTr); txt(x, caseIt(full), P, P + ns * 0.78, nameTr(ns));
+        let y = P + ns * 0.78 + 78;
+        if (sub.length) { setText(42); fill(rgba(d.ink, 0.66)); txt(x, sub.join('  —  '), P, y, 0.5); y += 70; }
+        if (d.tagline) { fill(ratio(d.accent2, d.bg) >= 3 ? d.accent2 : d.ink); setItalic(50); txt(x, d.tagline, P, y); }
+        detailRows(P, H - P - rowsH(60), maxW, 38, 60, d.bg);
+      } else if (d.layout === 'editorial') {
+        const maxW = W - P * 2;
+        fill(labelColor(d.bg)); setLabel(26); txt(x, (T('org') || 'Vizitka').toLocaleUpperCase('cs'), P, P + 18, 7);
+        if (d.tagline) { fill(rgba(d.ink, 0.6)); setLabel(26); txt(x, d.tagline.toLocaleUpperCase('cs'), W - P, P + 18, 5, 'right'); }
+        const l1 = caseIt(first), l2 = caseIt(last); let s = 250 * NS;
+        for (; s > 90; s -= 4) { setName(s); if (widthOf(x, l1, nameTr(s)) <= maxW && (!l2 || widthOf(x, l2, nameTr(s)) <= maxW)) break; }
+        fill(d.ink); setName(s); const b1 = P + 70 + s * 0.8; txt(x, l1, P - s * 0.03, b1, nameTr(s));
+        let b2 = b1;
+        if (l2) { b2 = b1 + s * 0.9; if (D.it) setFont(x, 400, s, d.display, D.fb, true); fill(ratio(d.accent, d.bg) >= 3 ? d.accent : d.ink); txt(x, l2, P - s * 0.03, b2, nameTr(s)); }
+        const rule = Math.min(b2 + 70, H - P - 300); fill(d.ink); x.fillRect(P, rule, maxW, 3);
+        const top = rule + 76, qS = Math.min(H - P - (rule + 40), 360);
+        qr(W - P - qS, rule + 40, qS, !lightBg(d.bg), 18);
+        let y = top; setText(40, 600); fill(d.ink);
+        for (const line of sub) { fitSize(x, line, maxW * 0.3, 40, 24, (z) => setText(z, 600)); txt(x, line, P, y); y += 56; fill(rgba(d.ink, 0.6)); }
+        const cx = P + maxW * 0.34; detailRows(cx, top, (W - P - qS - 60) - cx, 36, 56, d.bg, 56);
+      } else if (d.layout === 'ticket') {
+        const inset = 54, stubW = 640, divX = W - inset - stubW;
+        x.strokeStyle = rgba(d.ink, 0.55); x.lineWidth = 3; x.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
+        fill(d.accent); [[inset, inset], [W - inset, inset], [inset, H - inset], [W - inset, H - inset]].forEach(([a, b]) => x.fillRect(a - 9, b - 9, 18, 18));
+        x.setLineDash([14, 14]); x.beginPath(); x.moveTo(divX, inset + 40); x.lineTo(divX, H - inset - 40); x.stroke(); x.setLineDash([]);
+        fill(d.bg); x.beginPath(); x.arc(divX, inset, 34, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(divX, H - inset, 34, 0, Math.PI * 2); x.fill();
+        const qS = 420; qr(divX + (stubW - qS) / 2 + inset / 2 - 27, (H - qS) / 2 - 30, qS, true, 16);
+        fill(labelColor(d.bg)); setLabel(24); txt(x, 'ULOŽIT KONTAKT', divX + stubW / 2 - 10, (H + qS) / 2 + 40, 6, 'center');
+        const L = P + 30, maxW = divX - L - 80;
+        fill(labelColor(d.bg)); setLabel(26); txt(x, (T('org') || T('title') || '').toLocaleUpperCase('cs'), L, P + 60, 7);
+        fill(d.ink); const ns = fitSize(x, caseIt(full), maxW, 160 * NS, 64, setName, nameTr); txt(x, caseIt(full), L, P + 60 + ns * 0.95, nameTr(ns));
+        let y = P + 60 + ns * 0.95 + 76;
+        if (T('title') && T('name')) { setItalic(52); fill(rgba(d.ink, 0.8)); txt(x, T('title'), L, y); y += 66; }
+        if (d.tagline) { setText(34); fill(labelColor(d.bg)); txt(x, d.tagline, L, y, 0.5); }
+        detailRows(L, H - P - 20 - rowsH(56), maxW, 36, 56, d.bg);
+      } else if (d.layout === 'swiss') {
+        const nm = caseIt(full); const ns = fitSize(x, nm, H - P * 2, 240 * NS, 90, setName, nameTr);
+        fill(ratio(d.accent, d.bg) >= 3 ? d.accent : d.ink);
+        x.save(); x.translate(P + ns * 0.74, H - P); x.rotate(-Math.PI / 2); txt(x, nm, 0, 0, nameTr(ns)); x.restore();
+        const x0 = P + ns * 0.74 + 110, maxW = W - P - x0, qS = 330; qr(W - P - qS, P, qS, !lightBg(d.bg), 14);
+        let y = P + 46;
+        sub.forEach((line, i) => { const set = (z) => setText(z, i ? Tx.w : 700); fill(i ? rgba(d.ink, 0.62) : d.ink); fitSize(x, line, maxW - qS - 60, i ? 38 : 46, 24, set); txt(x, line, x0, y); y += 62; });
+        if (d.tagline) { setItalic(42); fill(rgba(d.ink, 0.7)); txt(x, d.tagline, x0, y + 10); }
+        const ruleY = P + qS + 70; fill(d.ink); x.fillRect(x0, ruleY, maxW, 4);
+        detailRows(x0, ruleY + 96, maxW, 40, 64, d.bg, 70);
+      } else if (d.layout === 'aura') {
+        const inkA = aura(x, W, H, d);
+        const pS = 520, pX = W - P - pS, pY = (H - pS) / 2;
+        glass(x, pX - 26, pY - 26, pS + 52, 44); qr(pX + 30, pY + 30, pS - 60, true, 24);
+        const maxW = pX - P - 110;
+        fill(inkA); x.globalAlpha = 0.75; setLabel(26); txt(x, (sub.join('  ·  ') || ' ').toLocaleUpperCase('cs'), P, P + 40, 5); x.globalAlpha = 1;
+        const nm = caseIt(full); const ns = fitSize(x, nm, maxW, 170 * NS, 64, setName, nameTr); txt(x, nm, P, H * 0.5 + ns * 0.3, nameTr(ns));
+        if (d.tagline) { setItalic(48); x.globalAlpha = 0.85; txt(x, d.tagline, P, H * 0.5 + ns * 0.3 + 86); x.globalAlpha = 1; }
+        const keep = d.accent; d.accent = inkA; detailRows(P, H - P - rowsH(56), maxW, 36, 56, d.bg, 64, 'left', inkA); d.accent = keep;
+      } else {
+        const panel = Math.round(W * 0.36), px = W - panel;
+        fill(d.accent); x.fillRect(px, 0, panel, H);
+        const qS = 440; qr(px + (panel - qS) / 2, (H - qS) / 2 - 20, qS, true, 22);
+        fill(on(d.accent)); setLabel(24); txt(x, 'NASKENUJTE · ULOŽTE', px + panel / 2, (H + qS) / 2 + 40, 6, 'center');
+        const maxW = px - P - 90; fill(d.ink);
+        const nm = caseIt(full); const ns = fitSize(x, nm, maxW, 150 * NS, 60, setName, nameTr); txt(x, nm, P, P + ns * 0.8, nameTr(ns));
+        let y = P + ns * 0.8 + 44; fill(ratio(d.accent, d.bg) >= 3 ? d.accent : d.ink); x.fillRect(P, y, 90, 6); y += 74;
+        if (sub.length) { setText(42); fill(rgba(d.ink, 0.7)); fitSize(x, sub.join('  ·  '), maxW, 42, 26, (z) => setText(z)); txt(x, sub.join('  ·  '), P, y, 0.4); y += 66; }
+        if (d.tagline) { setItalic(48); fill(d.ink); txt(x, d.tagline, P, y); }
+        detailRows(P, H - P - rowsH(58), maxW, 38, 58, d.bg);
+      }
+      return cvs;
+    }
+
+    // ---------------- KARTIČKA A6 ----------------
+    if (fmt === 'a6') {
+      const P = 104, maxW = W - P * 2;
+      const kicker = (mode === 'pay' && current.amount ? 'K ÚHRADĚ' : current.kind.toLocaleUpperCase('cs'));
+      const dRows = details.filter(([k]) => !(mode === 'pay' && k === 'Částka'));
+      const realDetails = details; // pro výšku
+      if (d.layout === 'editorial') {
+        fill(labelColor(d.bg)); setLabel(24); txt(x, kicker, P, P + 20, 7);
+        fill(d.ink); const hd = fitWrap(x, head, maxW, 190 * NS, 70, 2, setName);
+        let y = P + 40 + hd.s * 0.85;
+        hd.lines.forEach((l, i) => { if (i === 1 && D.it) setFont(x, 400, hd.s, d.display, D.fb, true); if (i === 1) fill(ratio(d.accent, d.bg) >= 3 ? d.accent : d.ink); txt(x, l, P - hd.s * 0.02, y, nameTr(hd.s)); y += hd.s * 0.92; setName(hd.s); fill(d.ink); });
+        y += 10;
+        if (mode === 'pay' && current.amount) { setText(110 * TS, 600); fill(d.ink); txt(x, current.amount, P, y + 60); y += 120; }
+        if (d.tagline) { setItalic(46 * TS); fill(rgba(d.ink, 0.7)); txt(x, d.tagline, P, y + 30); y += 70; }
+        fill(d.ink); x.fillRect(P, y + 30, maxW, 3);
+        const rowsTop = H - P - Math.max(0, dRows.length - 1) * 64 * TS;
+        const qTop = y + 80, qS = Math.min(maxW * 0.62, rowsTop - 110 - qTop);
+        qr(P, qTop, qS, !lightBg(d.bg), 16);
+        fill(rgba(d.ink, 0.55)); setLabel(22); txt(x, 'NASKENUJTE FOTOAPARÁTEM', P + qS + 40, qTop + 30, 4);
+        detailRowsWrap(dRows, P, H - P - Math.max(0, dRows.length - 1) * 64 * TS, maxW, 40, 64, d.bg);
+      } else if (d.layout === 'block') {
+        const bh = Math.round(H * 0.44);
+        fill(d.accent); x.fillRect(0, 0, W, bh);
+        const bInk = on(d.accent);
+        fill(rgba(bInk, 0.7)); setLabel(24); txt(x, kicker, P, P + 20, 7);
+        fill(bInk); const hd = fitWrap(x, head, maxW, 180 * NS, 70, 2, setName);
+        let y = P + 40 + hd.s * 0.85; hd.lines.forEach((l) => { txt(x, l, P, y, nameTr(hd.s)); y += hd.s * 0.92; });
+        if (d.tagline) { setItalic(44 * TS); fill(rgba(bInk, 0.8)); txt(x, d.tagline, P, Math.min(y + 20, bh - 150)); }
+        const qS = 560; const qX = (W - qS) / 2, qY = bh - qS * 0.32;
+        x.save(); x.shadowColor = 'rgba(0,0,0,0.18)'; x.shadowBlur = 40; x.shadowOffsetY = 14; fill('#ffffff'); roundRect(x, qX, qY, qS, qS, 30); x.fill(); x.restore();
+        qr(qX, qY, qS, true, 30);
+        let ty = qY + qS + 90;
+        if (mode === 'pay' && current.amount) { setText(96 * TS, 600); fill(d.ink); txt(x, current.amount, W / 2, ty, 0, 'center'); ty += 80; }
+        detailRowsWrap(dRows, W / 2, Math.max(ty, H - P - Math.max(0, dRows.length - 1) * 60 * TS), maxW, 38, 60, d.bg, 'center');
+      } else if (d.layout === 'frame') {
+        const inset = 56; x.strokeStyle = rgba(d.ink, 0.6); x.lineWidth = 3; x.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
+        x.strokeRect(inset + 14, inset + 14, W - (inset + 14) * 2, H - (inset + 14) * 2);
+        fill(labelColor(d.bg)); setLabel(24); txt(x, kicker, W / 2, P + 70, 8, 'center');
+        fill(d.ink); const hd = fitWrap(x, head, maxW - 60, 150 * NS, 60, 2, setName);
+        let y = P + 100 + hd.s * 0.85; hd.lines.forEach((l) => { txt(x, l, W / 2, y, nameTr(hd.s), 'center'); y += hd.s * 0.95; });
+        if (d.tagline) { setItalic(42 * TS); fill(rgba(d.ink, 0.7)); txt(x, d.tagline, W / 2, y + 6, 0, 'center'); y += 60; }
+        const rowsTop = H - P - 40 - Math.max(0, dRows.length - 1) * 58 * TS - (mode === 'pay' && current.amount ? 110 : 0);
+        const qS = Math.min(600, rowsTop - 120 - (y + 40)); const qX = (W - qS) / 2, qY = y + 50;
+        qr(qX, qY, qS, !lightBg(d.bg), 10);
+        fill(d.accent && ratio(d.accent, d.bg) >= 2 ? d.accent : d.ink); const b = 46, g = 26, th = 7;
+        [[qX - g, qY - g, 1, 1], [qX + qS + g, qY - g, -1, 1], [qX - g, qY + qS + g, 1, -1], [qX + qS + g, qY + qS + g, -1, -1]].forEach(([cx, cy, sx, sy]) => { x.fillRect(sx > 0 ? cx : cx - b, sy > 0 ? cy : cy - th, b, th); x.fillRect(sx > 0 ? cx : cx - th, sy > 0 ? cy : cy - b, th, b); });
+        let ty = rowsTop;
+        if (mode === 'pay' && current.amount) { setText(84 * TS, 600); fill(d.ink); txt(x, current.amount, W / 2, ty, 0, 'center'); ty += 100; }
+        detailRowsWrap(dRows, W / 2, ty, maxW - 60, 36, 58, d.bg, 'center');
+      } else { // aura
+        const inkA = aura(x, W, H, d);
+        fill(inkA); x.globalAlpha = 0.75; setLabel(24); txt(x, kicker, P, P + 20, 7); x.globalAlpha = 1;
+        const hd = fitWrap(x, head, maxW, 170 * NS, 64, 2, setName);
+        let y = P + 40 + hd.s * 0.85; hd.lines.forEach((l) => { txt(x, l, P, y, nameTr(hd.s)); y += hd.s * 0.92; });
+        if (d.tagline) { setItalic(44 * TS); x.globalAlpha = 0.85; txt(x, d.tagline, P, y + 10); x.globalAlpha = 1; y += 60; }
+        const pS = 620, pX = (W - pS) / 2, pY = y + 70;
+        glass(x, pX - 30, pY - 30, pS + 60, 50); qr(pX, pY, pS, true, 28);
+        let ty = pY + pS + 120;
+        if (mode === 'pay' && current.amount) { setText(84 * TS, 600); fill(inkA); txt(x, current.amount, W / 2, ty, 0, 'center'); ty += 90; }
+        const keep = d.accent; d.accent = inkA;
+        detailRowsWrap(dRows, W / 2, Math.max(ty, H - P - Math.max(0, dRows.length - 1) * 58 * TS), maxW, 36, 58, d.bg, 'center', inkA);
+        d.accent = keep;
+      }
+      return cvs;
+
+      function detailRowsWrap(rows, X, top, mW, size, lh, bg, align, inkC) {
+        rowsSrc = rows;
+        detailRows(X, top, mW, size, lh, bg, labelW(size), align, inkC);
+        rowsSrc = details;
+      }
+    }
+
+    // ---------------- SAMOLEPKA ----------------
+    {
+      const P = 70;
+      if (d.layout === 'badge') {
+        fill(d.accent); roundRect(x, 0, 0, W, H, 90); x.fillRect(0, 0, W, H);
+        const bInk = on(d.accent);
+        const qS = 760, qX = (W - qS) / 2, qY = P + 20;
+        qr(qX, qY, qS, true, 46);
+        fill(bInk); const space = H - (qY + qS) - P;
+        const hs = fitSize(x, head, W - P * 2.4, Math.min(170, space * 0.9) * NS, 50, setName, nameTr);
+        txt(x, head, W / 2, qY + qS + (space + hs * 0.72) / 2 + 6, nameTr(hs), 'center');
+      } else {
+        fill('#ffffff'); x.fillRect(0, 0, W, H);
+        const ring = d.accent && lum(d.accent) < 0.6 ? d.accent : d.ink;
+        x.lineWidth = 52; x.strokeStyle = ring; roundRect(x, 26, 26, W - 52, H - 52, 110); x.stroke();
+        const label = d.upper ? head : head.toLocaleUpperCase('cs');
+        fill(ring); const hs = fitSize(x, label, W - 320, 96 * NS, 40, setName, (s) => s * 0.08);
+        const ly = 140 + hs * 0.75; txt(x, label, W / 2, ly, hs * 0.08, 'center');
+        const qS = Math.min(H - ly - 170, 720), qX = (W - qS) / 2;
+        const keepInk = d.ink; d.ink = ring; qr(qX, ly + 50, qS, false); d.ink = keepInk;
+      }
+      return cvs;
+    }
+
+    function aura(x, W, H, d) {
+      const g1 = x.createRadialGradient(W * 0.12, H * 0.1, 0, W * 0.12, H * 0.1, Math.max(W, H) * 0.75); g1.addColorStop(0, rgba(d.accent, 0.95)); g1.addColorStop(1, rgba(d.accent, 0));
+      const g2 = x.createRadialGradient(W * 0.95, H * 1.05, 0, W * 0.95, H * 1.05, Math.max(W, H) * 0.7); g2.addColorStop(0, rgba(d.accent2, 0.9)); g2.addColorStop(1, rgba(d.accent2, 0));
+      x.fillStyle = g1; x.fillRect(0, 0, W, H); x.fillStyle = g2; x.fillRect(0, 0, W, H);
+      let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      for (let i = 0; i < (W * H) / 100; i++) { x.fillStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'; x.fillRect(rnd() * W, rnd() * H, 2, 2); }
+      const avg = (lum(d.bg) + lum(d.accent) * 0.6 + lum(d.accent2) * 0.4) / 2;
+      return avg > 0.35 ? '#111113' : '#ffffff';
+    }
+    function glass(x, X, Y, S, r) { x.fillStyle = 'rgba(255,255,255,0.18)'; roundRect(x, X, Y, S, S, r); x.fill(); x.strokeStyle = 'rgba(255,255,255,0.45)'; x.lineWidth = 2; x.stroke(); }
+  }
+
+  // ================= Start =================
+  renderField(); update();
+})();
+</script>
+
+<script>if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(function(){});</script>
+</body>
+</html>

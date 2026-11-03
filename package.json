@@ -1,0 +1,21 @@
+{
+  "name": "nacti-me",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Načti.me – aplikace pro Android, iPhone a Windows (BrosWars Studio)",
+  "author": "BrosWars Studio",
+  "scripts": {
+    "sync": "npx cap sync",
+    "android": "npx cap sync android && npx cap open android",
+    "ios": "npx cap sync ios && npx cap open ios",
+    "serve": "npx --yes serve www"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": { "@capacitor/cli": "^8.6.0", "@capacitor/assets": "^4.0.0" }
+}

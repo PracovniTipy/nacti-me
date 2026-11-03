@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Načti.me</string>
+    <string name="title_activity_main">Načti.me</string>
+    <string name="package_name">me.nacti.app</string>
+    <string name="custom_url_scheme">me.nacti.app</string>
+</resources>

@@ -1,0 +1,9 @@
+{
+  "appId": "me.nacti.app",
+  "appName": "Načti.me",
+  "webDir": "www",
+  "backgroundColor": "#f3f3f1",
+  "server": {
+    "androidScheme": "https"
+  }
+}
