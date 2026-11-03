@@ -78,8 +78,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
 /* Vstup */
 .block { display: grid; gap: 12px; }
-.modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; background: var(--line); padding: 2px; border-radius: 11px; }
-.modes button { border: 0; background: transparent; padding: 8px 6px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; }
+.modes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; background: var(--line); padding: 2px; border-radius: 11px; }
+.modes button { border: 0; background: transparent; padding: 8px 2px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; }
 .modes button[aria-pressed="true"] { background: var(--field); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .field { display: grid; gap: 8px; }
 .field.grid2 { grid-template-columns: 1fr 1fr; }
@@ -94,6 +94,18 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--fg); }
 .field input[aria-invalid="true"] { border-color: var(--warn); }
 .field ::placeholder { color: var(--muted); }
+.drop { display: grid; justify-items: center; gap: 4px; padding: 26px 16px; border: 1.5px dashed var(--line); border-radius: 14px; background: var(--field); cursor: pointer; text-align: center; }
+.drop:hover, .drop:focus-within { border-color: var(--fg); }
+.drop b { font-size: 16px; font-weight: 600; }
+.drop span { font-size: 13px; color: var(--muted); }
+.thumbs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.thumbs:empty { display: none; }
+.thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--line); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb.up img { opacity: .4; }
+.thumb.up::after { content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px; border-radius: 50%; border: 2px solid #fff; border-top-color: transparent; animation: spin .8s linear infinite; }
+.thumb.err { outline: 2px solid var(--warn); outline-offset: -2px; }
+.thumb button { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 13px; line-height: 1; cursor: pointer; }
 .err { margin: -2px 2px 0; font-size: 13px; color: var(--warn); }
 
 .row { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -166,6 +178,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
       <button type="button" data-mode="wifi" aria-pressed="false">Wi-Fi</button>
       <button type="button" data-mode="card" aria-pressed="false">Kontakt</button>
       <button type="button" data-mode="pay" aria-pressed="false">Platba</button>
+      <button type="button" data-mode="photo" aria-pressed="false">Fotky</button>
     </div>
     <div class="field" id="field"></div>
     <p class="err" id="err" hidden></p>
@@ -223,6 +236,13 @@ button, input, textarea, select { font: inherit; color: inherit; }
   if (window.qrcode && qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs['UTF-8']) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 
   // ================= Nastavení =================
+  // Úložiště fotek (Supabase Storage, složka nacti-fotky). Veřejný klíč je určený pro prohlížeč.
+  const PHOTO_API = 'https://smjplqxwqyraphfeqsyk.supabase.co';
+  const PHOTO_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtanBscXh3cXlyYXBoZmVxc3lrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MjA3NzMsImV4cCI6MjEwODQ5Njc3M30.X6VUO5NSdJFG4E00aAALSDkW39JqANjQmk0dees_Q78';
+  const PHOTO_VIEW = 'https://nacti.me/f/';
+  const MAX_PHOTOS = 10;
+  const canUpload = !window.claude && /^https?:$/.test(location.protocol);
+
   // Partnerský (affiliate) odkaz na tiskárnu. Po registraci v partnerském programu sem vložte svůj odkaz – tlačítko se samo zobrazí.
   const PRINT_PARTNER_URL = '';
   if (PRINT_PARTNER_URL) { const a = $('partner'); a.href = PRINT_PARTNER_URL; a.hidden = false; }
@@ -235,6 +255,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
     wifi: { ssid: '', pass: '' },
     card: { name: '', title: '', org: '', tel: '', email: '', web: '', addr: '' },
     pay: { acc: '', amount: '', vs: '', msg: '' },
+    photo: { items: [] },
   };
 
   // ================= Formáty obsahu =================
@@ -269,7 +290,14 @@ button, input, textarea, select { font: inherit; color: inherit; }
     return { iban: 'CZ' + ck + bban };
   }
 
+  const plural = (n, a, b, c) => (n === 1 ? a : n < 5 ? b : c);
   function detect() {
+    if (mode === 'photo') {
+      const ok = values.photo.items.filter((i) => i.status === 'ok');
+      if (!ok.length) return null;
+      const label = `${ok.length} ${plural(ok.length, 'fotka', 'fotky', 'fotek')}`;
+      return { kind: 'Fotky', summary: label, data: PHOTO_VIEW + '?p=' + ok.map((i) => i.id).join('.'), details: [['Fotky', label]] };
+    }
     if (mode === 'wifi') {
       const { ssid, pass } = values.wifi;
       if (!ssid.trim()) return null;
@@ -398,7 +426,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
     $('minSize').textContent = ''; $('minSize').className = 'check-line';
     renderFormats();
     if (!window.qrcode) return clearQr('Generátor se nenačetl. Obnovte stránku.');
-    if (!current) return clearQr(mode === 'any' ? 'Začněte psát' : 'Vyplňte údaje');
+    if (!current) return clearQr(mode === 'any' ? 'Začněte psát' : mode === 'photo' ? (values.photo.items.some((i) => i.status === 'up') ? 'Nahrávám fotky…' : 'Přidejte fotky') : 'Vyplňte údaje');
     let next;
     try { next = matrix(current.data); } catch (e) { current = null; return clearQr('Na jeden kód je to příliš dlouhé'); }
     $('idle').hidden = true;
@@ -456,8 +484,59 @@ button, input, textarea, select { font: inherit; color: inherit; }
     pay: [['acc', 'Číslo účtu (123456789/0800)', 'text', 'wide num'], ['amount', 'Částka v Kč', 'text', 'num', 'decimal'], ['vs', 'Variabilní symbol', 'text', 'num', 'numeric'], ['msg', 'Zpráva pro příjemce', 'text', 'wide']],
   };
   function grow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, 160) + 'px'; }
+  // ---- Fotky ----
+  const rid = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789', r = crypto.getRandomValues(new Uint8Array(12)); return [...r].map((v) => a[v % a.length]).join(''); };
+  async function shrink(file) {
+    let src;
+    try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+    catch (e) { src = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(file); }); }
+    const w = src.width, h = src.height, k = Math.min(1, 1600 / Math.max(w, h));
+    const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    let q = 0.82, blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', q));
+    while (blob && blob.size > 1900000 && q > 0.4) { q -= 0.15; blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', q)); }
+    return blob;
+  }
+  async function uploadPhoto(item, file) {
+    try {
+      const blob = await shrink(file);
+      const r = await fetch(`${PHOTO_API}/storage/v1/object/nacti-fotky/${item.id}.jpg`, {
+        method: 'POST', body: blob,
+        headers: { apikey: PHOTO_KEY, Authorization: 'Bearer ' + PHOTO_KEY, 'Content-Type': 'image/jpeg', 'cache-control': '31536000' },
+      });
+      item.status = r.ok ? 'ok' : 'err';
+    } catch (e) { item.status = 'err'; }
+    renderThumbs(); if (mode === 'photo') update();
+  }
+  function renderThumbs() {
+    const t = $('thumbs'); if (!t) return;
+    t.innerHTML = values.photo.items.map((i, k) => `<div class="thumb ${i.status}"><img src="${i.thumb}" alt="Fotka ${k + 1}"><button type="button" data-rm="${i.id}" aria-label="Odebrat fotku">×</button></div>`).join('');
+    t.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => {
+      values.photo.items = values.photo.items.filter((i) => i.id !== b.dataset.rm); renderThumbs(); update();
+    }));
+    const failed = values.photo.items.some((i) => i.status === 'err');
+    if (failed) { $('err').hidden = false; $('err').textContent = 'Některou fotku se nepodařilo nahrát. Zkontrolujte připojení a přidejte ji znovu.'; }
+  }
+
   function renderField() {
     const f = $('field');
+    if (mode === 'photo') {
+      f.className = 'field';
+      f.innerHTML = canUpload
+        ? `<label class="drop" for="in-photo"><input id="in-photo" type="file" accept="image/*" multiple hidden><b>Vyberte fotky</b><span>Až ${MAX_PHOTOS} fotek. Po naskenování se zobrazí v telefonu.</span></label><div class="thumbs" id="thumbs"></div>`
+        : `<div class="drop"><b>Fotky nahrajete na nacti.me</b><span>V tomto náhledu nahrávání nejde. Otevřete aplikaci na nacti.me/app.</span></div>`;
+      const inp = $('in-photo');
+      if (inp) inp.addEventListener('change', () => {
+        const free = MAX_PHOTOS - values.photo.items.length;
+        [...inp.files].filter((fl) => fl.type.startsWith('image/')).slice(0, Math.max(0, free)).forEach((fl) => {
+          const item = { id: rid(), status: 'up', thumb: URL.createObjectURL(fl) };
+          values.photo.items.push(item); uploadPhoto(item, fl);
+        });
+        inp.value = ''; renderThumbs(); update();
+      });
+      renderThumbs();
+      return;
+    }
     if (mode === 'any') {
       f.className = 'field';
       f.innerHTML = '<textarea id="in-any" rows="1" aria-label="Obsah kódu" placeholder="Odkaz, text, e-mail nebo telefon" spellcheck="false" autocapitalize="off"></textarea>';
@@ -479,7 +558,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
     if (mode === 'card') format = 'card';
     design = null; $('out').hidden = true; resetAiLabel();
     update();
-    const first = $('field').querySelector('input'); if (first) first.focus();
+    const first = $('field').querySelector('input:not([type=file])'); if (first) first.focus();
   }));
   $('inks').innerHTML = INKS.map(([n, c], i) => `<button type="button" style="--c:${c}" aria-label="${n}" aria-pressed="${i === 0}" data-ink="${c}"></button>`).join('');
   $('inks').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
@@ -516,7 +595,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
     { bg: '#0f1d17', ink: '#ecf2ea', accent: '#b8d8a8', accent2: '#b8d8a8', display: 'Instrument Serif', text: 'DM Mono', upper: false },
     { bg: '#0e1116', ink: '#f4f2ec', accent: '#c9a45c', accent2: '#c9a45c', display: 'Syne', text: 'Manrope', upper: true },
   ];
-  const DEFAULT_HEAD = { 'Odkaz': 'Navštivte nás', 'Text': 'Naskenujte', 'E-mail': 'Napište nám', 'Telefon': 'Zavolejte nám', 'Wi-Fi': 'Wi-Fi pro hosty', 'Platba': 'Zaplaťte QR platbou', 'Kontakt': '' };
+  const DEFAULT_HEAD = { 'Odkaz': 'Navštivte nás', 'Text': 'Naskenujte', 'E-mail': 'Napište nám', 'Telefon': 'Zavolejte nám', 'Wi-Fi': 'Wi-Fi pro hosty', 'Platba': 'Zaplaťte QR platbou', 'Kontakt': '', 'Fotky': 'Prohlédněte si fotky' };
 
   let format = 'a6', design = null, busy = false, printCanvas = null, sample = null, presetIdx = 0;
   const used = { card: [], a6: [], sticker: [] };
