@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://nacti.me/sitemap.xml
