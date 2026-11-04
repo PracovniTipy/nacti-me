@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Načti.me</title>
+<style>
+html,body{margin:0;height:100%;background:#08070b;color:#f4f2f8;font:500 16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{height:100%;display:grid;place-items:center;text-align:center;padding:24px;box-sizing:border-box}
+.l{font-weight:800;font-size:22px;letter-spacing:-.04em}.l em{font-style:normal;font-weight:300;color:#9a96aa}
+.s{width:28px;height:28px;margin:18px auto;border-radius:50%;border:3px solid #a88bff;border-top-color:transparent;animation:r .8s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+p{color:#9a96aa;margin:0}a{color:#f4f2f8}
+</style>
+</head>
+<body>
+<main><div><div class="l">Načti<em>.me</em></div><div class="s" id="s"></div><p id="m">Otevírám…</p></div></main>
+<script src="../config.js"></script>
+<script>
+(function () {
+  var c = new URLSearchParams(location.search).get('c') || '';
+  var m = document.getElementById('m'), s = document.getElementById('s');
+  function fail(t) { s.style.display = 'none'; m.innerHTML = t + '<br><br><a href="../">Vytvořit vlastní QR kód zdarma</a>'; }
+  var cfg = window.NACTI || {};
+  if (!/^[A-Za-z0-9]{7}$/.test(c) || !cfg.supabaseUrl) return fail('Tento kód neexistuje.');
+  fetch(cfg.supabaseUrl + '/functions/v1/nacti-q?c=' + c, { headers: { apikey: cfg.anonKey, Authorization: 'Bearer ' + cfg.anonKey } })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+    .then(function (x) {
+      if (x.ok && x.j.url) return location.replace(x.j.url);
+      fail(x.status === 410 ? 'Majitel tento kód dočasně vypnul.' : 'Tento kód neexistuje.');
+    })
+    .catch(function () { fail('Nepodařilo se připojit. Zkuste to prosím znovu.'); });
+})();
+</script>
+</body>
+</html>

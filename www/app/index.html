@@ -8,6 +8,7 @@
 <meta property="og:title" content="Načti.me – QR kódy, QR platby a vizitky">
 <meta property="og:description" content="QR kód na web, Wi-Fi, kontakt i QR platbu. Vizitky a samolepky k tisku během minuty.">
 <meta property="og:url" content="https://nacti.me/app/">
+<script src="../config.js"></script>
 <link rel="manifest" href="../manifest.webmanifest">
 <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
@@ -242,10 +243,20 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
   // ================= Nastavení =================
   // Úložiště fotek (Supabase Storage, složka nacti-fotky). Veřejný klíč je určený pro prohlížeč.
-  const PHOTO_API = 'https://smjplqxwqyraphfeqsyk.supabase.co';
-  const PHOTO_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtanBscXh3cXlyYXBoZmVxc3lrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MjA3NzMsImV4cCI6MjEwODQ5Njc3M30.X6VUO5NSdJFG4E00aAALSDkW39JqANjQmk0dees_Q78';
+  const NACTI = window.NACTI || {};
+  const PHOTO_API = NACTI.supabaseUrl || 'https://smjplqxwqyraphfeqsyk.supabase.co';
+  const PHOTO_KEY = NACTI.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtanBscXh3cXlyYXBoZmVxc3lrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MjA3NzMsImV4cCI6MjEwODQ5Njc3M30.X6VUO5NSdJFG4E00aAALSDkW39JqANjQmk0dees_Q78';
   const PHOTO_VIEW = 'https://nacti.me/f/';
-  const MAX_PHOTOS = 10;
+  // Načti.me Pro: stav uložila stránka /pro po ověření předplatného.
+  const isPro = () => { try { const c = JSON.parse(localStorage.getItem('nacti_pro') || 'null'); return !!(c && c.pro && c.until > Date.now()); } catch (e) { return false; } };
+  const userToken = () => {
+    try {
+      const ref = (NACTI.supabaseUrl || '').replace(/^https:\/\//, '').split('.')[0];
+      const raw = ref && localStorage.getItem('sb-' + ref + '-auth-token');
+      return raw ? JSON.parse(raw).access_token : null;
+    } catch (e) { return null; }
+  };
+  const MAX_PHOTOS = isPro() ? 50 : 3;
   const canUpload = !window.claude && /^https?:$/.test(location.protocol);
 
   // Partnerský (affiliate) odkaz na tiskárnu. Po registraci v partnerském programu sem vložte svůj odkaz – tlačítko se samo zobrazí.
@@ -404,7 +415,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
     const c = document.createElement('canvas'); c.width = c.height = total * scale;
     const x = c.getContext('2d'); x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height); x.fillStyle = ink;
     for (let r = 0; r < next.n; r++) for (let col = 0; col < next.n; col++) if (next.m[r * next.n + col]) x.fillRect((col + quiet) * scale, (r + quiet) * scale, scale, scale);
-    drawSig(x, c.width, c.height, scale);
+    if (!isPro()) drawSig(x, c.width, c.height, scale);
     img.src = c.toDataURL('image/png'); img.classList.add('ready');
     pngCanvas = c; setSaveEnabled(true);
   }
@@ -412,7 +423,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
     const q = QUIET, t = next.n + q * 2; let d = '';
     for (let r = 0; r < next.n; r++) for (let c = 0; c < next.n; c++) if (next.m[r * next.n + c]) d += `M${c + q} ${r + q}h1v1h-1z`;
     const sig = `<text x="${t - 1.3}" y="${t - 1.3}" text-anchor="end" font-family="Geist, 'Helvetica Neue', Arial, sans-serif" fill="${ink}"><tspan font-size="0.85" opacity="0.5">www.</tspan><tspan font-size="1.25" font-weight="600" opacity="0.85">nacti.me</tspan></text>`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" width="1024" height="1024"><rect width="${t}" height="${t}" fill="#ffffff"/><path fill="${ink}" d="${d}" shape-rendering="crispEdges"/>${sig}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" width="1024" height="1024"><rect width="${t}" height="${t}" fill="#ffffff"/><path fill="${ink}" d="${d}" shape-rendering="crispEdges"/>${isPro() ? '' : sig}</svg>`;
   }
   function show(next) {
     cancelAnimationFrame(anim); clearTimeout(exportTimer);
@@ -545,7 +556,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
     if (mode === 'photo') {
       f.className = 'field';
       f.innerHTML = canUpload
-        ? `<label class="drop" for="in-photo"><input id="in-photo" type="file" accept="image/*" multiple hidden><b>Vyberte fotky</b><span>Až ${MAX_PHOTOS} fotek. Po naskenování se zobrazí v telefonu.</span></label><div class="thumbs" id="thumbs"></div>`
+        ? `<label class="drop" for="in-photo"><input id="in-photo" type="file" accept="image/*" multiple hidden><b>Vyberte fotky</b><span>${isPro() ? 'Až 50 fotek.' : 'Až 3 fotky zdarma, s Pro až 50.'} Po naskenování se zobrazí v telefonu.</span></label><div class="thumbs" id="thumbs"></div>`
         : `<div class="drop"><b>Fotky nahrajete na nacti.me</b><span>V tomto náhledu nahrávání nejde. Otevřete aplikaci na nacti.me/app.</span></div>`;
       const inp = $('in-photo');
       if (inp) inp.addEventListener('change', () => {
@@ -691,7 +702,7 @@ Nevymýšlej žádné kontaktní ani platební údaje.`;
       : { kind: current.kind, summary: mode === 'wifi' ? 'síť ' + values.wifi.ssid : current.summary };
     const r = await fetch(`${PHOTO_API}/functions/v1/nacti-design`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', apikey: PHOTO_KEY, Authorization: 'Bearer ' + PHOTO_KEY },
+      headers: Object.assign({ 'content-type': 'application/json', apikey: PHOTO_KEY, Authorization: 'Bearer ' + PHOTO_KEY }, userToken() ? { 'x-user-token': userToken() } : {}),
       body: JSON.stringify({ format, brief, info, avoid: used[format].slice(-3) }),
     });
     if (!r.ok) throw { code: r.status === 429 ? 'rate_limited' : 'unavailable' };
@@ -710,7 +721,7 @@ Nevymýšlej žádné kontaktní ani platební údaje.`;
       try {
         d = sample ? await aiDesign(brief) : await serverDesign(brief);
         note = (d && typeof d.why === 'string' && d.why.trim()) ? d.why.trim().slice(0, 160) : 'Návrh od AI na míru.';
-      } catch (e) { note = e && e.code === 'rate_limited' ? 'Dnes jste vyčerpali AI návrhy, použil jsem připravený styl.' : 'AI teď není k dispozici, použil jsem připravený styl.'; d = null; }
+      } catch (e) { note = e && e.code === 'rate_limited' ? (isPro() ? 'AI je teď vytížená, použil jsem připravený styl.' : 'Dnes jste vyčerpali 3 AI návrhy zdarma. S Načti.me Pro jsou bez omezení.') : 'AI teď není k dispozici, použil jsem připravený styl.'; d = null; }
     }
     if (!d) d = { ...PRESETS[presetIdx++ % PRESETS.length], layout: FORMATS[format].layouts.find((l) => !used[format].includes(l)) };
     if (mode === 'card') d.headline = current.headline;
@@ -1044,6 +1055,12 @@ Nevymýšlej žádné kontaktní ani platební údaje.`;
       return avg > 0.35 ? '#111113' : '#ffffff';
     }
     function glass(x, X, Y, S, r) { x.fillStyle = 'rgba(255,255,255,0.18)'; roundRect(x, X, Y, S, S, r); x.fill(); x.strokeStyle = 'rgba(255,255,255,0.45)'; x.lineWidth = 2; x.stroke(); }
+  }
+
+  // Odkaz na Pro v hlavičce (jen na nacti.me)
+  if (/(^|\.)nacti\.me$/.test(location.hostname)) {
+    const r = document.querySelector('.mark span:last-child');
+    if (r) r.innerHTML = `<a href="../pro/" style="color:inherit;text-decoration:none">${isPro() ? 'Pro ✓' : 'Načti.me Pro →'}</a>`;
   }
 
   // ================= Start =================
