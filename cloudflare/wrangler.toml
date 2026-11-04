@@ -1,0 +1,17 @@
+name = "nacti-api"
+main = "src/index.js"
+compatibility_date = "2025-09-24"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nacti"
+database_id = "DATABASE_ID"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "nacti-fotky"
+
+# Tajné klíče (nastaví se automaticky z GitHub secrets při nasazení):
+#   ANTHROPIC_API_KEY – AI návrhy
+#   STRIPE_SECRET_KEY – předplatné Pro

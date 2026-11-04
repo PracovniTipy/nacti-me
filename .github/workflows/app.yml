@@ -1,3 +1,5 @@
+# 0) Nasadí API na Cloudflare (fotky, AI, dynamické kódy, Pro). Potřebuje GitHub secret CLOUDFLARE_API_TOKEN.
+#    Volitelně ANTHROPIC_API_KEY (AI návrhy) a STRIPE_SECRET_KEY (předplatné). Bez tokenu se krok přeskočí.
 # 1) Zveřejní aplikaci na GitHub Pages (adresa pro Microsoft Store a instalaci z prohlížeče)
 # 2) Sestaví Android aplikaci (.apk na zkoušku, .aab pro Google Play)
 name: Aplikace
@@ -10,13 +12,55 @@ permissions:
   pages: write
   id-token: write
 jobs:
+  api:
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+    defaults:
+      run:
+        working-directory: cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        with: { node-version: 22 }
+      - name: Nasadit API na Cloudflare
+        id: deploy
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: |
+          set -e
+          npm ci --no-audit --no-fund
+          W="npx wrangler"
+          ID=$($W d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).find(d=>d.name==="nacti");console.log(x?x.uuid:"")})')
+          if [ -z "$ID" ]; then $W d1 create nacti; ID=$($W d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{console.log(JSON.parse(s).find(d=>d.name==="nacti").uuid)})'); fi
+          sed -i "s/DATABASE_ID/$ID/" wrangler.toml
+          $W r2 bucket create nacti-fotky 2>/dev/null || true
+          $W d1 execute nacti --remote --file schema.sql -y
+          $W deploy | tee deploy.log
+          for k in ANTHROPIC_API_KEY STRIPE_SECRET_KEY; do v="${!k}"; if [ -n "$v" ]; then printf '%s' "$v" | $W secret put "$k"; fi; done
+          URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          echo "API: $URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
   web:
+    needs: api
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Doplnit adresu API
+        if: needs.api.outputs.url != ''
+        env:
+          API_URL: ${{ needs.api.outputs.url }}
+        run: |
+          printf "window.NACTI = { apiUrl: '%s' };\n" "$API_URL" > www/config.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -25,9 +69,16 @@ jobs:
         uses: actions/deploy-pages@v4
 
   android:
+    needs: api
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Doplnit adresu API
+        if: needs.api.outputs.url != ''
+        env:
+          API_URL: ${{ needs.api.outputs.url }}
+        run: |
+          printf "window.NACTI = { apiUrl: '%s' };\n" "$API_URL" > www/config.js
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - uses: actions/setup-java@v4

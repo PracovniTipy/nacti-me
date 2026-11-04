@@ -35,3 +35,20 @@ Potřebujete Mac s Xcode a účet Apple Developer: `npm install && npm run ios` 
 
 ## Úpravy
 Celá aplikace je v `www/index.html`. Po změně stačí `git push` (web) a `npx cap sync` (mobil).
+
+## Server: Cloudflare (složka `cloudflare/`)
+
+Jeden Cloudflare Worker `nacti-api` obsluhuje fotky (R2), AI návrhy, dynamické kódy se statistikami (D1)
+a předplatné Pro přes Stripe. Přihlášení je bez hesla: po zaplacení dostane zařízení token,
+další zařízení se přidá naskenováním QR kódu z dashboardu (tlačítko Přidat zařízení).
+
+Nasazuje se samo při každém pushi (GitHub Actions), když jsou v repozitáři nastavené GitHub secrets:
+
+| Secret | K čemu |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | povinné – nasazení Workeru, D1 a R2 |
+| `CLOUDFLARE_ACCOUNT_ID` | jen pokud má token přístup k více účtům |
+| `ANTHROPIC_API_KEY` | AI návrhy vizitek |
+| `STRIPE_SECRET_KEY` | předplatné Načti.me Pro (99 Kč měsíčně) |
+
+Adresu API workflow sám zapíše do `www/config.js`.

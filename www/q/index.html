@@ -23,8 +23,9 @@ p{color:#9a96aa;margin:0}a{color:#f4f2f8}
   var m = document.getElementById('m'), s = document.getElementById('s');
   function fail(t) { s.style.display = 'none'; m.innerHTML = t + '<br><br><a href="../">Vytvořit vlastní QR kód zdarma</a>'; }
   var cfg = window.NACTI || {};
-  if (!/^[A-Za-z0-9]{7}$/.test(c) || !cfg.supabaseUrl) return fail('Tento kód neexistuje.');
-  fetch(cfg.supabaseUrl + '/functions/v1/nacti-q?c=' + c, { headers: { apikey: cfg.anonKey, Authorization: 'Bearer ' + cfg.anonKey } })
+  var api = (cfg.apiUrl || '').replace(/\/$/, '');
+  if (!/^[A-Za-z0-9]{7}$/.test(c) || !api) return fail('Tento kód neexistuje.');
+  fetch(api + '/q/' + c)
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
     .then(function (x) {
       if (x.ok && x.j.url) return location.replace(x.j.url);

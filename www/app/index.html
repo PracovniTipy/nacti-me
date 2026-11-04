@@ -19,7 +19,7 @@
 <body>
 <title>Načti.me</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="theme-color" content="#07060a">
+<meta name="theme-color" content="#111113">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Syne:wght@700;800&family=Manrope:wght@500;700&family=Fraunces:ital,wght@0,400;0,600;1,400;1,600&family=Bodoni+Moda:ital,wght@0,400;0,800;1,400&family=Unbounded:wght@400;800&family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=DM+Mono:wght@400;500&display=swap">
@@ -300,22 +300,16 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
   if (window.qrcode && qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs['UTF-8']) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 
   // ================= Nastavení =================
-  // Úložiště fotek (Supabase Storage, složka nacti-fotky). Veřejný klíč je určený pro prohlížeč.
+  // API Načti.me na Cloudflare (fotky, AI). Adresu doplní nasazení do config.js.
   const NACTI = window.NACTI || {};
-  const PHOTO_API = NACTI.supabaseUrl || 'https://smjplqxwqyraphfeqsyk.supabase.co';
-  const PHOTO_KEY = NACTI.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtanBscXh3cXlyYXBoZmVxc3lrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MjA3NzMsImV4cCI6MjEwODQ5Njc3M30.X6VUO5NSdJFG4E00aAALSDkW39JqANjQmk0dees_Q78';
+  const API = (NACTI.apiUrl || '').replace(/\/$/, '');
   const PHOTO_VIEW = 'https://nacti.me/f/';
   // Načti.me Pro: stav uložila stránka /pro po ověření předplatného.
   const isPro = () => { try { const c = JSON.parse(localStorage.getItem('nacti_pro') || 'null'); return !!(c && c.pro && c.until > Date.now()); } catch (e) { return false; } };
-  const userToken = () => {
-    try {
-      const ref = (NACTI.supabaseUrl || '').replace(/^https:\/\//, '').split('.')[0];
-      const raw = ref && localStorage.getItem('sb-' + ref + '-auth-token');
-      return raw ? JSON.parse(raw).access_token : null;
-    } catch (e) { return null; }
-  };
+  const userToken = () => { try { return localStorage.getItem('nacti_token'); } catch (e) { return null; } };
+  const authH = () => (userToken() ? { Authorization: 'Bearer ' + userToken() } : {});
   const MAX_PHOTOS = isPro() ? 50 : 3;
-  const canUpload = !window.claude && /^https?:$/.test(location.protocol);
+  const canUpload = !window.claude && /^https?:$/.test(location.protocol) && !!API;
 
   // Partnerský (affiliate) odkaz na tiskárnu. Po registraci v partnerském programu sem vložte svůj odkaz – tlačítko se samo zobrazí.
   const PRINT_PARTNER_URL = '';
@@ -591,10 +585,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
   async function uploadPhoto(item, file) {
     try {
       const blob = await shrink(file);
-      const r = await fetch(`${PHOTO_API}/storage/v1/object/nacti-fotky/${item.id}.jpg`, {
-        method: 'POST', body: blob,
-        headers: { apikey: PHOTO_KEY, Authorization: 'Bearer ' + PHOTO_KEY, 'Content-Type': 'image/jpeg', 'cache-control': '31536000' },
-      });
+      const r = await fetch(`${API}/photo/${item.id}`, { method: 'PUT', body: blob, headers: Object.assign({ 'Content-Type': 'image/jpeg' }, authH()) });
       item.status = r.ok ? 'ok' : 'err';
     } catch (e) { item.status = 'err'; }
     renderThumbs(); if (mode === 'photo') update();
@@ -843,9 +834,9 @@ Nevymýšlej žádné kontaktní ani platební údaje.`;
     const info = mode === 'card'
       ? { name: values.card.name, title: values.card.title, org: values.card.org, web: values.card.web }
       : { kind: current.kind, summary: mode === 'wifi' ? 'síť ' + values.wifi.ssid : current.summary };
-    const r = await fetch(`${PHOTO_API}/functions/v1/nacti-design`, {
+    const r = await fetch(`${API}/design`, {
       method: 'POST',
-      headers: Object.assign({ 'content-type': 'application/json', apikey: PHOTO_KEY, Authorization: 'Bearer ' + PHOTO_KEY }, userToken() ? { 'x-user-token': userToken() } : {}),
+      headers: Object.assign({ 'content-type': 'application/json' }, authH()),
       body: JSON.stringify({ format, brief, info, avoid: brief ? [] : used[format].slice(-3), current: design ? { layout: design.layout, bg: design.bg, ink: design.ink, accent: design.accent, display: design.display, text: design.text, upper: design.upper, nameScale: design.nameScale, textScale: design.textScale } : null }),
     });
     if (!r.ok) throw { code: r.status === 429 ? 'rate_limited' : 'unavailable' };

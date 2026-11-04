@@ -200,12 +200,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   <section class="gate" id="vLogin" hidden>
     <div class="gcard">
       <span class="kick">Načti.me Pro</span>
-      <h1>Vaše kódy.<br><em>Pod kontrolou.</em></h1>
-      <p>Přihlaste se e-mailem. Pošleme vám odkaz, žádné heslo si pamatovat nemusíte.</p>
-      <form class="gform" id="loginForm" novalidate>
-        <input type="email" id="loginEmail" autocomplete="email" placeholder="vas@email.cz" aria-label="E-mail" required>
-        <button class="btn" type="submit" id="loginBtn">Poslat odkaz</button>
-      </form>
+      <h1 id="loginTitle">Přihlašuji…</h1>
+      <p id="loginText">Chvilku strpení.</p>
       <div class="gmsg" id="loginMsg" role="status"></div>
     </div>
   </section>
@@ -223,9 +219,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
         <li>Až 50 fotek v jednom kódu</li>
         <li>Bez podpisu Načti.me na kódech</li>
       </ul>
-      <div class="gform"><button class="btn" type="button" id="payBtn">Předplatit Pro</button><button class="btn ghost" type="button" id="logout1">Odhlásit</button></div>
+      <div class="gform"><button class="btn" type="button" id="payBtn">Předplatit Pro</button><button class="btn ghost" type="button" id="logout1" hidden>Odhlásit</button></div>
       <div class="gmsg" id="payMsg" role="status"></div>
-      <span class="fine">Platba proběhne bezpečně přes Stripe. Předplatné spravujete a rušíte sami jedním kliknutím.</span>
+      <span class="fine">Platba proběhne bezpečně přes Stripe. Žádné heslo: po zaplacení jste rovnou přihlášení.</span>
+      <span class="fine"><b>Pro už máte?</b> Na zařízení, kde jste přihlášení, klikněte na <b>Přidat zařízení</b> a naskenujte kód telefonem.</span>
     </div>
   </section>
 
@@ -299,7 +296,6 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 <div class="toast" id="toast" role="status"></div>
 
 <script src="../config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
 (function () {
@@ -311,7 +307,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const onSite = /(^|\.)nacti\.me$/.test(location.hostname);
   const CFG = window.NACTI || {};
-  const live = onSite && !!(CFG.supabaseUrl && CFG.anonKey);
+  const API = (CFG.apiUrl || '').replace(/\/$/, '');
+  const live = onSite && !!API;
   const QR_BASE = 'https://nacti.me/q/?c=';
 
   if (!onSite) {
@@ -554,10 +551,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     if (!target) { msg.textContent = 'Zadejte webovou adresu, třeba vas-web.cz/menu.'; return; }
     if (live) {
       const btn = $('dSave'); btn.disabled = true;
-      const q = editing
-        ? sb.from('nacti_codes').update({ name, target, updated_at: new Date().toISOString() }).eq('id', cid)
-        : sb.from('nacti_codes').insert({ id: cid, name, target });
-      const { error } = await q; btn.disabled = false;
+      let error = null;
+      try { await api(editing ? '/codes/' + cid : '/codes', editing ? 'PATCH' : 'POST', editing ? { name, target } : { id: cid, name, target }); } catch (e) { error = e; }
+      btn.disabled = false;
       if (error) { msg.textContent = 'Uložení se nepovedlo. Zkuste to prosím znovu.'; return; }
       await loadReal();
     } else {
@@ -570,7 +566,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   async function toggleCode(id) {
     const c = data.codes.find((x) => x.id === id); if (!c) return;
     c.active = !c.active;
-    if (live) { const { error } = await sb.from('nacti_codes').update({ active: c.active }).eq('id', id); if (error) { c.active = !c.active; toast('Změna se nepovedla'); } }
+    if (live) { try { await api('/codes/' + id, 'PATCH', { active: c.active }); } catch (e) { c.active = !c.active; toast('Změna se nepovedla'); } }
     renderCodes(); renderHero(); toast(c.active ? 'Kód je znovu aktivní' : 'Kód je pozastavený');
   }
   // Stažení (bez podpisu – výhoda Pro)
@@ -595,7 +591,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   let tt; function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2800); }
 
   // ================= Účet, předplatné, skutečná data =================
-  let sb = null, state = 'demo', session = null;
+  // Bez hesla a e-mailu: po zaplacení dostane zařízení tajný token. Další zařízení se přidá naskenováním QR.
+  let state = 'demo';
+  const tok = { get: () => { try { return localStorage.getItem('nacti_token'); } catch (e) { return null; } },
+    set: (t) => { try { t ? localStorage.setItem('nacti_token', t) : localStorage.removeItem('nacti_token'); } catch (e) {} } };
   function show(v) {
     state = v;
     $('vLogin').hidden = v !== 'login'; $('vPay').hidden = v !== 'pay';
@@ -604,41 +603,33 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     $('newCode').hidden = v === 'login' || v === 'pay';
   }
   function setProCache(pro, until) { try { localStorage.setItem('nacti_pro', JSON.stringify({ pro, until })); } catch (e) {} }
-  async function billing(action) {
-    const r = await fetch(CFG.supabaseUrl + '/functions/v1/nacti-billing', {
-      method: 'POST', headers: { 'content-type': 'application/json', apikey: CFG.anonKey, Authorization: 'Bearer ' + session.access_token },
-      body: JSON.stringify({ action }),
-    });
+  async function api(path, method = 'GET', body) {
+    const h = {}; if (body) h['content-type'] = 'application/json';
+    const t = tok.get(); if (t) h.Authorization = 'Bearer ' + t;
+    const r = await fetch(API + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw Object.assign(new Error(j.error || 'error'), { code: j.error });
+    if (!r.ok) throw Object.assign(new Error(j.error || 'error'), { code: j.error, status: r.status });
     return j;
   }
   async function loadReal() {
-    const { data: codes, error } = await sb.from('nacti_codes').select('id,name,target,active,created_at').order('created_at', { ascending: false });
-    if (error) { toast('Data se nepodařilo načíst'); return; }
-    let scans = [];
-    if (codes.length) {
-      const since = new Date(Date.now() - DAYS * 864e5).toISOString();
-      const r = await sb.from('nacti_scans').select('code_id,at,device,country').gte('at', since).order('at', { ascending: false }).limit(50000);
-      scans = r.data || [];
-    }
-    data = realData(codes, scans); renderAll();
+    try { const j = await api('/codes'); data = realData(j.codes, j.scans); renderAll(); }
+    catch (e) { toast('Data se nepodařilo načíst'); }
   }
+  function login(title, text, msg) { show('login'); $('loginTitle').innerHTML = title; $('loginText').textContent = text; $('loginMsg').textContent = msg || ''; }
   async function afterLogin() {
-    const ctx = $('payWho'); ctx.textContent = session.user.email;
     let st;
-    const paid = new URLSearchParams(location.search).has('zaplaceno');
-    for (let i = 0; i < (paid ? 6 : 1); i++) {
-      try { st = await billing('status'); } catch (e) { st = { pro: false, error: e.code }; }
-      if (st.pro || !paid) break;
-      $('payMsg').textContent = 'Ověřuji platbu…'; await new Promise((r) => setTimeout(r, 2500));
+    try { st = await api('/pro/status'); }
+    catch (e) {
+      if (e.status === 401) { tok.set(null); setProCache(false, 0); show('pay'); return; }
+      st = { pro: false, error: e.code };
     }
-    if (paid) history.replaceState(null, '', location.pathname);
+    $('payWho').textContent = st.email || 'Načti.me Pro';
     setProCache(!!st.pro, st.pro ? Date.now() + 3 * 864e5 : 0);
-    if (!st.pro) { show('pay'); if (st.error === 'not_configured') $('payMsg').textContent = 'Platby se právě spouštějí. Zkuste to prosím za chvíli.'; return; }
+    if (!st.pro) { show('pay'); $('logout1').hidden = false; if (st.error === 'not_configured') $('payMsg').textContent = 'Platby se právě spouštějí. Zkuste to prosím za chvíli.'; return; }
     show('dash');
-    $('topRight').innerHTML = '<button class="btn ghost" type="button" id="portalBtn">Předplatné</button><button class="btn ghost" type="button" id="logout2">Odhlásit</button><a class="btn" id="newCode2" href="#">Nový kód</a>';
-    $('portalBtn').addEventListener('click', async () => { try { const r = await billing('portal'); location.href = r.url; } catch (e) { toast('Správu předplatného teď nejde otevřít'); } });
+    $('topRight').innerHTML = '<button class="btn ghost" type="button" id="deviceBtn">Přidat zařízení</button><button class="btn ghost" type="button" id="portalBtn">Předplatné</button><button class="btn ghost" type="button" id="logout2">Odhlásit</button><a class="btn" id="newCode2" href="#">Nový kód</a>';
+    $('deviceBtn').addEventListener('click', addDevice);
+    $('portalBtn').addEventListener('click', async () => { try { const r = await api('/pro/portal', 'POST'); location.href = r.url; } catch (e) { toast('Správu předplatného teď nejde otevřít'); } });
     $('logout2').addEventListener('click', logout);
     $('newCode2').addEventListener('click', (e) => { e.preventDefault(); openDrawer(null); });
     await loadReal();
@@ -646,43 +637,64 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     setInterval(async () => {
       if (!data || !data.codes.length || document.hidden) return;
       const top = data.feed.length ? Math.max(...data.feed.map((f) => f.at)) : Date.now() - 60000;
-      const r = await sb.from('nacti_scans').select('code_id,at,device,country').gt('at', new Date(top).toISOString()).order('at', { ascending: true }).limit(50);
-      for (const s of r.data || []) {
+      let scans = []; try { scans = (await api('/codes?since=' + top)).scans; } catch (e) { return; }
+      for (const s of scans) {
         const code = data.codes.find((c) => c.id === s.code_id); if (!code) continue;
         const f = { code, place: s.country ? (COUNTRY[s.country] || s.country) : '', device: s.device || '', at: new Date(s.at).getTime() };
         data.feed.push(f); pushFeed(f);
         data.daily[DAYS - 1].v++; const ci = data.codes.indexOf(code); if (ci >= 0) data.perCode[ci][DAYS - 1]++;
       }
-      if ((r.data || []).length) { renderHero(); }
+      if (scans.length) renderHero();
     }, 20000);
   }
-  async function logout() { try { localStorage.removeItem('nacti_pro'); } catch (e) {} await sb.auth.signOut(); location.reload(); }
-
+  async function addDevice() {
+    let r; try { r = await api('/pro/device', 'POST'); } catch (e) { toast('Teď to nejde, zkuste to za chvíli'); return; }
+    let box = document.getElementById('devBox');
+    if (!box) {
+      box = document.createElement('div'); box.id = 'devBox'; box.className = 'gate'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'Přidat zařízení');
+      box.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(7,6,10,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:grid;place-items:center;padding:20px';
+      document.body.append(box);
+      box.addEventListener('click', (e) => { if (e.target === box) box.remove(); });
+    }
+    box.innerHTML = `<div class="gcard" style="text-align:center;justify-items:center"><span class="kick">Přidat zařízení</span><h1 style="font-size:32px">Naskenujte<br><em>telefonem.</em></h1><canvas width="520" height="520" style="width:220px;height:220px;border-radius:18px"></canvas><p>Na druhém zařízení otevřete fotoaparát a naskenujte kód. Přihlásí se samo, bez hesla.</p><span class="fine" id="devLeft"></span><button class="btn ghost" type="button" id="devClose">Hotovo</button></div>`;
+    qrTo(box.querySelector('canvas'), r.url, 3);
+    $('devClose').addEventListener('click', () => box.remove());
+    const end = Date.now() + r.expiresIn * 1000;
+    const tick = () => { if (!document.body.contains(box)) return; const s = Math.max(0, Math.round((end - Date.now()) / 1000)); $('devLeft').textContent = s ? `Kód platí ještě ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : 'Platnost vypršela. Klikněte znovu na Přidat zařízení.'; if (s) setTimeout(tick, 1000); };
+    tick();
+  }
+  async function logout() {
+    try { await api('/pro/logout', 'POST'); } catch (e) {}
+    tok.set(null); try { localStorage.removeItem('nacti_pro'); } catch (e) {} location.href = location.pathname;
+  }
   async function startLive() {
-    sb = window.supabase.createClient(CFG.supabaseUrl, CFG.anonKey);
-    const { data: s } = await sb.auth.getSession(); session = s.session;
-    sb.auth.onAuthStateChange((ev, s2) => { const had = !!session; session = s2; if (!had && s2) afterLogin(); });
-    if (!session) { show('login'); } else { afterLogin(); }
-    $('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = $('loginEmail').value.trim(), m = $('loginMsg');
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { m.className = 'gmsg err'; m.textContent = 'Zadejte platný e-mail.'; return; }
-      $('loginBtn').disabled = true;
-      const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + '/pro/' } });
-      $('loginBtn').disabled = false;
-      m.className = error ? 'gmsg err' : 'gmsg';
-      m.textContent = error ? 'Odkaz se nepodařilo poslat. Zkuste to za chvíli.' : `Hotovo. Otevřete odkaz, který přišel na ${email}.`;
-    });
     $('payBtn').addEventListener('click', async () => {
       $('payBtn').disabled = true; $('payMsg').className = 'gmsg'; $('payMsg').textContent = 'Otevírám bezpečnou platbu…';
-      try { const r = await billing('checkout'); location.href = r.url; }
+      try { const r = await api('/pro/checkout', 'POST'); location.href = r.url; }
       catch (e) { $('payBtn').disabled = false; $('payMsg').className = 'gmsg err'; $('payMsg').textContent = e.code === 'not_configured' ? 'Platby se právě spouštějí. Zkuste to prosím za chvíli.' : 'Platbu se nepodařilo otevřít. Zkuste to znovu.'; }
     });
     $('logout1').addEventListener('click', logout);
+    const q = new URLSearchParams(location.search), sid = q.get('s'), k = q.get('k');
+    if (sid || k) {
+      history.replaceState(null, '', location.pathname);
+      login(sid ? 'Děkujeme.<br><em>Ověřuji platbu.</em>' : 'Přihlašuji<br><em>toto zařízení.</em>', 'Chvilku strpení.');
+      for (let i = 0; i < (sid ? 5 : 1); i++) {
+        try { const r = await api(sid ? '/pro/claim' : '/pro/redeem', 'POST', sid ? { session_id: sid } : { code: k }); tok.set(r.token); break; }
+        catch (e) {
+          if (sid && e.code === 'not_paid' && i < 4) { await new Promise((r) => setTimeout(r, 2500)); continue; }
+          if (e.code === 'already_used' && tok.get()) break;
+          login('To se<br><em>nepovedlo.</em>', sid ? 'Platbu se nepodařilo ověřit. Pokud vám přišlo potvrzení od Stripe, ozvěte se nám a vše hned vyřešíme.' : 'Kód už vypršel. Na přihlášeném zařízení klikněte znovu na Přidat zařízení.');
+          $('loginMsg').innerHTML = '<a href="https://broswarsstudio.chatnelo.com/">Kontakt na BrosWars Studio</a>';
+          return;
+        }
+      }
+    }
+    if (tok.get()) { login('Načítám<br><em>vaše kódy.</em>', 'Chvilku strpení.'); await afterLogin(); }
+    else show('pay');
   }
 
   // ================= Start =================
-  if (live && window.supabase) { show('login'); startLive(); }
+  if (live) { show('login'); startLive(); }
   else {
     data = demoData(); show('demo'); renderAll();
     if (!reduce) setInterval(() => { const f = fakeScan(data.codes, data.places, 0); pushFeed(f); data.daily[DAYS - 1].v++; const t = $('total'); t.textContent = fmt((parseInt(t.textContent.replace(/\s/g, ''), 10) || 0) + 1); }, 6500);

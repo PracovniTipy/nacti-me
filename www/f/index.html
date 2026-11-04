@@ -39,9 +39,12 @@ figure.bad { color: var(--muted); font-size: 14px; padding: 40px 20px; text-alig
   <p class="hint" id="hint" hidden>Fotku uložíte podržením prstu (na počítači pravým tlačítkem).</p>
   <div class="cta"><b>Chcete taky takový kód?</b><a href="../app/">Vytvořit QR kód zdarma</a></div>
 </main>
+<script src="../config.js"></script>
 <script>
 (function () {
-  var BASE = 'https://smjplqxwqyraphfeqsyk.supabase.co/storage/v1/object/public/nacti-fotky/';
+  var API = ((window.NACTI || {}).apiUrl || '').replace(/\/$/, '');
+  // Starší fotky (nahrané před přechodem na Cloudflare) zůstávají dostupné na původní adrese.
+  var OLD = 'https://smjplqxwqyraphfeqsyk.supabase.co/storage/v1/object/public/nacti-fotky/';
   var p = new URLSearchParams(location.search).get('p') || '';
   var ids = p.split('.').filter(function (id) { return /^[A-Za-z0-9]{12}$/.test(id); }).slice(0, 10);
   var list = document.getElementById('list');
@@ -55,8 +58,9 @@ figure.bad { color: var(--muted); font-size: 14px; padding: 40px 20px; text-alig
     img.loading = i ? 'lazy' : 'eager';
     img.decoding = 'async';
     img.onload = function () { img.classList.add('in'); };
-    img.onerror = function () { fig.classList.add('bad'); fig.textContent = 'Tuhle fotku se nepodařilo načíst.'; };
-    img.src = BASE + id + '.jpg';
+    var tries = API ? [API + '/f/' + id, OLD + id + '.jpg'] : [OLD + id + '.jpg'];
+    img.onerror = function () { if (tries.length) { img.src = tries.shift(); return; } fig.classList.add('bad'); fig.textContent = 'Tuhle fotku se nepodařilo načíst.'; };
+    img.src = tries.shift();
     fig.appendChild(img); list.appendChild(fig);
   });
 })();

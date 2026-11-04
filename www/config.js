@@ -1,6 +1,5 @@
-// Načti.me – připojení k vlastnímu Supabase projektu (vyplní se po jeho založení).
-// Dokud je prázdné, Pro běží v ukázkovém režimu a aplikace funguje jako dosud.
+// Načti.me – adresa API na Cloudflare. Vyplní ji automaticky nasazení (GitHub Actions).
+// Dokud je prázdná, Pro běží v ukázkovém režimu a aplikace funguje bez fotek a AI ze serveru.
 window.NACTI = {
-  supabaseUrl: '',
-  anonKey: '',
+  apiUrl: '',
 };
