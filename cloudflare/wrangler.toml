@@ -5,7 +5,7 @@ workers_dev = true
 
 [[d1_databases]]
 binding = "DB"
-database_name = "nacti"
+database_name = "nacti-eu"
 database_id = "DATABASE_ID"
 
 [[r2_buckets]]
