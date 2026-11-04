@@ -55,18 +55,22 @@ Deno.serve(async (req) => {
     jmeno: clip(body?.info?.name, 80), pozice: clip(body?.info?.title, 80), firma: clip(body?.info?.org, 80),
     web: clip(body?.info?.web, 120), druh: clip(body?.info?.kind, 30), obsah: clip(body?.info?.summary, 120),
   };
+  const c = body?.current && typeof body.current === "object" ? body.current : null;
+  const current = c ? JSON.stringify({ layout: clip(c.layout, 20), bg: clip(c.bg, 7), ink: clip(c.ink, 7), accent: clip(c.accent, 7), display: clip(c.display, 30), text: clip(c.text, 30), upper: !!c.upper, nameScale: +c.nameScale || 1, textScale: +c.textScale || 1 }) : "";
   const avoid = Array.isArray(body?.avoid) ? body.avoid.filter((l: string) => LAYOUTS[format].includes(l)).slice(0, 5) : [];
   const names: Record<string, string> = { card: "vizitka 85×55 mm", a6: "kartička A6 105×148 mm (stojánek, leták)", sticker: "samolepka 50×50 mm" };
   const prompt = `Jsi art director předního designového studia. Navrhni tiskovinu na míru: ${names[format]} s QR kódem.
 Údaje: ${JSON.stringify(info)}
-Co si zákazník přeje: ${brief || "(nic neuvedl, odvoď styl z oboru a údajů)"}
+Přání zákazníka (ZÁVAZNÉ, má přednost před vším ostatním): ${brief || "(nic neuvedl, odvoď styl z oboru a údajů)"}
+Když zákazník uvede barvu, použij ji přesně (pozadí → bg, text → ink, detaily → accent). Když chce větší nebo menší jméno či údaje, nastav nameScale (0.6–1.4) nebo textScale (0.7–1.4). Styl, písmo i velká písmena dodrž.
+${current ? "Současný návrh: " + current + " – pokud zákazník chce jen úpravu, uprav tento návrh a zbytek ponech." : ""}
 Rozvržení: ${LAYOUTS[format].map((l) => `${l} (${HINTS[l]})`).join("; ")}.
-${avoid.length ? "Nepoužij rozvržení: " + avoid.join(", ") + "." : ""}
+${avoid.length && !brief ? "Nepoužij rozvržení: " + avoid.join(", ") + "." : ""}
 Písma pro nadpis: ${DISPLAY.join(", ")}. Písma pro údaje: ${TEXT.join(", ")}.
-Zvol barvy přesně podle přání a oboru, jako zkušený designér (žádná klišé). Text (ink) musí mít s pozadím (bg) kontrast aspoň 7:1.
+Když zákazník barvy neurčí, zvol paletu jako zkušený designér. Text (ink) musí být na pozadí (bg) dobře čitelný.
 ${format === "card" ? "headline = jméno osoby beze změny. tagline = krátký výstižný slogan česky do 36 znaků, nebo prázdný." : "headline = krátká česká výzva do 28 znaků. tagline = doplňující věta česky do 40 znaků, nebo prázdný."}
 Nevymýšlej žádné kontaktní ani platební údaje.
-Odpověz POUZE JSON: {"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"headline":"…","tagline":"…","why":"jedna věta česky, proč tento návrh sedí"}`;
+Odpověz POUZE JSON: {"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}`;
 
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
