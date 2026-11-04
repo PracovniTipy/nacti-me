@@ -34,6 +34,11 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: |
           set -e
+          # Z vloženého textu vezmi jen samotný token a ID účtu (bez mezer a řádků navíc)
+          TOK=$(printf '%s' "$CLOUDFLARE_API_TOKEN" | grep -oE '[A-Za-z0-9_-]{40,}' | head -1 || true)
+          [ -n "$TOK" ] && export CLOUDFLARE_API_TOKEN="$TOK" && echo "::add-mask::$TOK"
+          ACC=$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | grep -oE '[0-9a-f]{32}' | head -1 || true)
+          if [ -n "$ACC" ]; then export CLOUDFLARE_ACCOUNT_ID="$ACC"; else unset CLOUDFLARE_ACCOUNT_ID; fi
           npm ci --no-audit --no-fund
           W="npx wrangler"
           ID=$($W d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).find(d=>d.name==="nacti");console.log(x?x.uuid:"")})')
@@ -42,7 +47,7 @@ jobs:
           $W r2 bucket create nacti-fotky 2>/dev/null || true
           $W d1 execute nacti --remote --file schema.sql -y
           $W deploy | tee deploy.log
-          for k in ANTHROPIC_API_KEY STRIPE_SECRET_KEY; do v="${!k}"; if [ -n "$v" ]; then printf '%s' "$v" | $W secret put "$k"; fi; done
+          for k in ANTHROPIC_API_KEY STRIPE_SECRET_KEY; do v=$(printf '%s' "${!k}" | tr -d '[:space:]'); if [ -n "$v" ]; then printf '%s' "$v" | $W secret put "$k"; fi; done
           URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)
           echo "API: $URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
