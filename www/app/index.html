@@ -174,11 +174,11 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
   <section class="block" aria-label="Obsah kódu">
     <div class="modes" role="group" aria-label="Druh obsahu">
-      <button type="button" data-mode="any" aria-pressed="true">Cokoli</button>
-      <button type="button" data-mode="wifi" aria-pressed="false">Wi-Fi</button>
-      <button type="button" data-mode="card" aria-pressed="false">Kontakt</button>
-      <button type="button" data-mode="pay" aria-pressed="false">Platba</button>
+      <button type="button" data-mode="card" aria-pressed="true">Kontakt</button>
       <button type="button" data-mode="photo" aria-pressed="false">Fotky</button>
+      <button type="button" data-mode="pay" aria-pressed="false">Platba</button>
+      <button type="button" data-mode="any" aria-pressed="false">Cokoli</button>
+      <button type="button" data-mode="wifi" aria-pressed="false">Wi-Fi</button>
     </div>
     <div class="field" id="field"></div>
     <p class="err" id="err" hidden></p>
@@ -249,7 +249,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
   // ================= Stav =================
   const INKS = [['Černá', '#111113'], ['Indigo', '#3730a3'], ['Lesní', '#14532d'], ['Bordó', '#7f1d1d'], ['Oceán', '#0c4a6e']];
-  let ink = INKS[0][1], mode = 'any', current = null, prev = null;
+  let ink = INKS[0][1], mode = 'card', current = null, prev = null;
   const values = {
     any: 'broswars.cz',
     wifi: { ssid: '', pass: '' },
@@ -597,7 +597,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   ];
   const DEFAULT_HEAD = { 'Odkaz': 'Navštivte nás', 'Text': 'Naskenujte', 'E-mail': 'Napište nám', 'Telefon': 'Zavolejte nám', 'Wi-Fi': 'Wi-Fi pro hosty', 'Platba': 'Zaplaťte QR platbou', 'Kontakt': '', 'Fotky': 'Prohlédněte si fotky' };
 
-  let format = 'a6', design = null, busy = false, printCanvas = null, sample = null, presetIdx = 0;
+  let format = 'card', design = null, busy = false, printCanvas = null, sample = null, presetIdx = 0;
   const used = { card: [], a6: [], sticker: [] };
   if (window.claude && claude.use) claude.use('sample').then((s) => { sample = s; resetAiLabel(); }).catch(() => {});
   function resetAiLabel() { $('aiLabel').textContent = sample ? 'Navrhnout s AI' : 'Navrhnout'; }
