@@ -130,6 +130,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .formats button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--fg); }
 .formats i { display: block; border: 1.5px solid currentColor; border-radius: 3px; opacity: .8; }
 .formats small { font-family: var(--mono); font-size: 10px; color: var(--muted); font-weight: 400; }
+.brief { width: 100%; border: 1px solid var(--line); background: var(--field); border-radius: 14px; padding: 14px 16px; font-size: 16px; line-height: 1.4; resize: none; color: var(--fg); }
+.brief:focus { outline: none; border-color: var(--fg); }
+.brief::placeholder { color: var(--muted); }
 .ai { border: 0; border-radius: 14px; padding: 15px 18px; font-size: 15px; font-weight: 600; cursor: pointer; color: var(--fg); background: var(--field); box-shadow: inset 0 0 0 1px var(--line); display: flex; align-items: center; justify-content: center; gap: 10px; }
 .ai:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--fg); }
 .ai:disabled { opacity: .5; cursor: default; }
@@ -195,6 +198,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   <section class="print" aria-labelledby="printTitle">
     <h2 id="printTitle">Vytisknout <span>Navrhne AI</span></h2>
     <div class="formats" role="group" aria-label="Co vytisknout" id="formats"></div>
+    <textarea id="brief" class="brief" rows="2" maxlength="300" aria-label="Vaše představa" placeholder="Popište svou představu, třeba: kadeřnictví, jemné a luxusní, zlatá"></textarea>
     <button type="button" class="ai" id="aiBtn" disabled>
       <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0l1.6 4.8L14.4 6.4 9.6 8 8 12.8 6.4 8 1.6 6.4 6.4 4.8zM13 10l.7 2.3L16 13l-2.3.7L13 16l-.7-2.3L10 13l2.3-.7z"/></svg>
       <span id="aiLabel">Navrhnout s AI</span>
@@ -600,7 +604,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   let format = 'card', design = null, busy = false, printCanvas = null, sample = null, presetIdx = 0;
   const used = { card: [], a6: [], sticker: [] };
   if (window.claude && claude.use) claude.use('sample').then((s) => { sample = s; resetAiLabel(); }).catch(() => {});
-  function resetAiLabel() { $('aiLabel').textContent = sample ? 'Navrhnout s AI' : 'Navrhnout'; }
+  function resetAiLabel() { $('aiLabel').textContent = (sample || canUpload) ? 'Navrhnout s AI na míru' : 'Navrhnout'; }
   resetAiLabel();
 
   function renderFormats() {
@@ -644,33 +648,51 @@ button, input, textarea, select { font: inherit; color: inherit; }
     return d;
   }
 
-  async function aiDesign() {
+  async function aiDesign(brief) {
     const L = FORMATS[format].layouts, avoid = used[format].slice(-3);
     const ctxInfo = mode === 'card'
       ? { jmeno: values.card.name, pozice: values.card.title, firma: values.card.org, web: values.card.web }
       : { druh: current.kind, obsah: mode === 'wifi' ? 'síť ' + values.wifi.ssid : current.summary };
     const prompt = `Jsi špičkový grafický designér se zkušenostmi z předních studií. Navrhni odvážnou, kreativní a profesionální tiskovinu: ${FORMATS[format].name} (${FORMATS[format].size}) s QR kódem.
 Kontext: ${JSON.stringify(ctxInfo)}
+Přání zákazníka: ${brief || '(neuvedl, odvoď styl z oboru a údajů)'} – barvy, písmo i náladu přizpůsob přesně tomuto přání.
 Rozvržení k výběru: ${L.map((l) => `${l} (${LAYOUT_HINTS[l]})`).join('; ')}.
 ${avoid.length ? 'NEPOUŽÍVEJ rozvržení: ' + avoid.join(', ') + '.' : ''}
 Písma pro nadpis: ${Object.keys(DISPLAY).join(', ')}. Písma pro údaje: ${Object.keys(TEXT).join(', ')}.
 Barvy: žádná klišé, paleta jako od designového studia. Text (ink) musí mít s pozadím (bg) kontrast aspoň 7:1.
 ${mode === 'card' ? 'headline = jméno osoby beze změny. tagline = krátký slogan česky do 36 znaků podle oboru, nebo prázdný.' : 'headline = krátká, výstižná česká výzva do 28 znaků, co má člověk udělat (např. „Připojte se k Wi-Fi“). tagline = doplňující věta česky do 40 znaků, nebo prázdný.'}
 Odpověz POUZE JSON objektem:
-{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"headline":"…","tagline":"…"}
+{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"headline":"…","tagline":"…","why":"jedna věta česky, proč návrh sedí"}
 Nevymýšlej žádné kontaktní ani platební údaje.`;
     return sample.json(prompt, { modelTier: 'default', cache: false });
   }
 
+  async function serverDesign(brief) {
+    const info = mode === 'card'
+      ? { name: values.card.name, title: values.card.title, org: values.card.org, web: values.card.web }
+      : { kind: current.kind, summary: mode === 'wifi' ? 'síť ' + values.wifi.ssid : current.summary };
+    const r = await fetch(`${PHOTO_API}/functions/v1/nacti-design`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', apikey: PHOTO_KEY, Authorization: 'Bearer ' + PHOTO_KEY },
+      body: JSON.stringify({ format, brief, info, avoid: used[format].slice(-3) }),
+    });
+    if (!r.ok) throw { code: r.status === 429 ? 'rate_limited' : 'unavailable' };
+    return r.json();
+  }
+  const hasAi = () => !!sample || canUpload;
+
   async function designPrint() {
     if (busy || !current) return;
     busy = true; $('aiBtn').disabled = true; $('againBtn').disabled = true; $('aiBtn').classList.add('busy');
-    $('aiLabel').textContent = sample ? 'AI navrhuje…' : 'Navrhuji…';
+    $('aiLabel').textContent = hasAi() ? 'AI navrhuje na míru…' : 'Navrhuji…';
     if (used[format].length >= FORMATS[format].layouts.length) used[format].length = 0;
     let d = null, note = '';
-    if (sample) {
-      try { d = await aiDesign(); note = 'Návrh od AI.'; }
-      catch (e) { note = e && e.code === 'rate_limited' ? 'AI je vytížená, použil jsem připravený styl.' : 'AI teď není k dispozici, použil jsem připravený styl.'; d = null; }
+    const brief = $('brief').value.trim();
+    if (hasAi()) {
+      try {
+        d = sample ? await aiDesign(brief) : await serverDesign(brief);
+        note = (d && typeof d.why === 'string' && d.why.trim()) ? d.why.trim().slice(0, 160) : 'Návrh od AI na míru.';
+      } catch (e) { note = e && e.code === 'rate_limited' ? 'Dnes jste vyčerpali AI návrhy, použil jsem připravený styl.' : 'AI teď není k dispozici, použil jsem připravený styl.'; d = null; }
     }
     if (!d) d = { ...PRESETS[presetIdx++ % PRESETS.length], layout: FORMATS[format].layouts.find((l) => !used[format].includes(l)) };
     if (mode === 'card') d.headline = current.headline;
@@ -682,7 +704,7 @@ Nevymýšlej žádné kontaktní ani platební údaje.`;
     await renderPrint();
     $('pNote').textContent = `${note ? note + ' ' : ''}Vše upravíte níže. Tisková kvalita ${format === 'a6' ? 300 : 600} DPI.`;
     busy = false; $('aiBtn').disabled = !current; $('againBtn').disabled = false; $('aiBtn').classList.remove('busy');
-    $('aiLabel').textContent = sample ? 'Navrhnout znovu s AI' : 'Další návrh';
+    $('aiLabel').textContent = hasAi() ? 'Navrhnout znovu s AI' : 'Další návrh';
   }
   $('aiBtn').addEventListener('click', designPrint);
   $('againBtn').addEventListener('click', designPrint);
