@@ -168,8 +168,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 
 <div class="wrap">
   <header class="top">
-    <div class="brand"><a class="logo" href="../">Načti<em>.me</em></a><span class="pro">PRO</span></div>
-    <div class="right"><span class="demo">Ukázková data</span><a class="btn ghost" href="../app/">Nový kód</a></div>
+    <div class="brand"><a class="logo" id="homeLink" href="../">Načti<em>.me</em></a><span class="pro">PRO</span></div>
+    <div class="right"><span class="demo">Ukázková data</span><a class="btn ghost" id="newCode" href="../app/">Nový kód</a></div>
   </header>
 
   <section class="r1">
@@ -244,6 +244,12 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   const $ = (id) => document.getElementById(id);
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fmt = (n) => n.toLocaleString('cs-CZ');
+  // V náhledu (mimo nacti.me) vedou odkazy na zveřejněnou aplikaci a web.
+  if (!/(^|\.)nacti\.me$/.test(location.hostname)) {
+    const nc = $('newCode'), hl = $('homeLink');
+    nc.href = 'https://claude.ai/artifact/WAk53SQ72QR9MZMfvb5keL'; nc.target = '_blank'; nc.rel = 'noopener';
+    hl.href = 'https://claude.ai/artifact/HrueHF5aLRfSbYyDvNKaLj'; hl.target = '_blank'; hl.rel = 'noopener';
+  }
   let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
   // ---------- Ukázková data ----------
