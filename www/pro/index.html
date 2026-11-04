@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#08070b">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Načti.me Pro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,250..800&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: přehled shora dolů – jedno velké číslo s křivkou, vedle živý proud skenů; pod tím „kdy“ a „kde“; dole kódy. */
+:root {
+  --bg: #08070b;
+  --panel: #110f17;
+  --panel2: #17151f;
+  --ink: #f4f2f8;
+  --muted: #9a96aa;
+  --faint: #5d596b;
+  --line: rgba(255,255,255,.08);
+  --acc: #a88bff;
+  --acc2: #ff6aa8;
+  --up: #46d68c;
+  --down: #ff7a6b;
+  --seq0: #1b1726; --seq1: #33255a; --seq2: #4f35a0; --seq3: #7656e0; --seq4: #a88bff; --seq5: #d9ccff;
+  --sans: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
+
+/* Hlavička */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: linear-gradient(var(--bg) 70%, transparent); display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-block: 18px 14px; }
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.logo { font-weight: 800; font-size: 22px; letter-spacing: -0.04em; text-decoration: none; color: var(--ink); }
+.logo em { font-style: normal; font-weight: 300; color: var(--muted); }
+.pro { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; padding: 3px 8px; border-radius: 6px; color: #120d22; background: linear-gradient(100deg, var(--acc), var(--acc2)); }
+.demo { white-space: nowrap; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; color: var(--muted); border: 1px solid var(--line); padding: 4px 9px; border-radius: 999px; }
+.right { display: flex; align-items: center; gap: 10px; }
+.btn { white-space: nowrap; border: 0; cursor: pointer; border-radius: 999px; padding: 10px 18px; font-weight: 600; font-size: 14px; background: var(--ink); color: var(--bg); text-decoration: none; }
+.btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+.btn.ghost:hover { box-shadow: inset 0 0 0 1px var(--muted); }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 20px; min-width: 0; }
+.ph { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.ph h2 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.ph span { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .06em; }
+
+/* Řada 1 */
+.r1 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 900px) { .r1 { grid-template-columns: minmax(0, 1fr); } }
+.hero { position: relative; overflow: hidden; }
+.hero::before { content: ""; position: absolute; width: 520px; height: 520px; right: -160px; top: -260px; border-radius: 50%; background: radial-gradient(circle, rgba(168,139,255,.22), transparent 65%); pointer-events: none; }
+.hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; position: relative; }
+.kick { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.big { font-size: clamp(56px, 8vw, 104px); font-weight: 800; letter-spacing: -0.05em; line-height: .9; margin: 8px 0 6px; }
+.delta { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 13px; padding: 4px 10px; border-radius: 999px; background: rgba(70,214,140,.12); color: var(--up); }
+.delta.neg { background: rgba(255,122,107,.12); color: var(--down); }
+.sub { color: var(--muted); font-size: 14px; margin-left: 8px; }
+.seg { display: inline-flex; background: var(--panel2); border-radius: 999px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; font-family: var(--mono); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.chart { position: relative; margin-top: 10px; height: 220px; }
+.chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.tip { position: absolute; pointer-events: none; background: #1f1c29; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 12px; white-space: nowrap; transform: translate(-50%, -110%); opacity: 0; transition: opacity .12s; z-index: 3; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+.tip b { display: block; font-size: 15px; font-weight: 700; }
+.tip span { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+
+.minis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; position: relative; }
+.mini { background: var(--panel2); border-radius: 14px; padding: 12px 14px; min-width: 0; }
+.mini b { display: block; font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
+.mini span { font-size: 12px; color: var(--muted); }
+@media (max-width: 520px) { .minis { grid-template-columns: minmax(0, 1fr); } }
+
+/* Živě */
+.live .ph h2::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--up); margin-right: 8px; box-shadow: 0 0 0 0 rgba(70,214,140,.6); animation: ping 1.8s infinite; vertical-align: 1px; }
+@keyframes ping { 70% { box-shadow: 0 0 0 8px rgba(70,214,140,0); } 100% { box-shadow: 0 0 0 0 rgba(70,214,140,0); } }
+.feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 360px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 80%, transparent); mask-image: linear-gradient(#000 80%, transparent); }
+.feed li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 6px; border-radius: 12px; animation: drop .5s cubic-bezier(.2,.7,.2,1); }
+.feed li:first-child { background: rgba(168,139,255,.08); }
+@keyframes drop { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+.ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 15px; background: var(--panel2); }
+.feed .t { min-width: 0; }
+.feed .t b { display: block; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed .t span { font-size: 12px; color: var(--muted); }
+.feed time { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+
+/* Řada 2 */
+.r2 { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .r2 { grid-template-columns: minmax(0, 1fr); } }
+.heat { display: grid; grid-template-columns: 26px repeat(24, minmax(0, 1fr)); gap: 3px; position: relative; }
+.heat .d { font-family: var(--mono); font-size: 10px; color: var(--muted); align-self: center; }
+.heat .c { aspect-ratio: 1; border-radius: 3px; background: var(--seq0); cursor: default; }
+.heat .c:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
+.heat .h { font-family: var(--mono); font-size: 9px; color: var(--faint); text-align: center; }
+.insight { margin-top: 14px; display: flex; gap: 10px; align-items: baseline; font-size: 14px; }
+.insight b { font-weight: 700; }
+.legend { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 10px; }
+.legend i { width: 14px; height: 10px; border-radius: 2px; display: block; }
+
+.split { display: grid; gap: 16px; }
+.bars { display: grid; gap: 12px; }
+.bar { display: grid; gap: 6px; }
+.bar .lbl { display: flex; justify-content: space-between; font-size: 14px; }
+.bar .lbl span:last-child { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.bar .track { height: 8px; border-radius: 4px; background: var(--panel2); overflow: hidden; }
+.bar .fill { height: 100%; border-radius: 4px; background: var(--acc); width: 0; transition: width .9s cubic-bezier(.2,.7,.2,1); }
+
+/* Kódy */
+.codes { display: grid; gap: 8px; }
+.code { display: grid; grid-template-columns: 56px minmax(0, 1.6fr) minmax(0, 1fr) 110px auto; gap: 16px; align-items: center; padding: 12px; border-radius: 16px; background: var(--panel2); border: 1px solid transparent; transition: border-color .2s; }
+.code:hover { border-color: var(--line); }
+.code canvas { width: 56px; height: 56px; border-radius: 8px; background: #fff; display: block; }
+.code .n b { display: block; font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code .n > span { font-size: 12px; color: var(--muted); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.chip { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; background: rgba(168,139,255,.14); color: var(--acc); margin-right: 6px; }
+.code .s b { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.code .s span { font-size: 12px; color: var(--muted); display: block; }
+.code svg { width: 110px; height: 34px; display: block; }
+.acts { display: flex; gap: 6px; align-items: center; }
+.sw { width: 40px; height: 24px; border-radius: 99px; background: var(--faint); position: relative; border: 0; cursor: pointer; transition: background .2s; flex: none; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.sw[aria-checked="true"] { background: var(--up); }
+.sw[aria-checked="true"]::after { transform: translateX(16px); }
+.code.off { opacity: .5; }
+@media (max-width: 760px) {
+  .code { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .code canvas { width: 48px; height: 48px; }
+  .code svg, .code .s, .code [data-edit] { display: none; }
+  .code .n { cursor: pointer; }
+  .demo { font-size: 10px; padding: 3px 7px; }
+  .top .btn { padding: 8px 12px; font-size: 13px; }
+}
+
+/* Panel úprav */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 20; opacity: 0; pointer-events: none; transition: opacity .25s; }
+.scrim.on { opacity: 1; pointer-events: auto; }
+.drawer { position: fixed; z-index: 21; top: 0; right: 0; bottom: 0; width: min(440px, 100%); background: var(--panel); border-left: 1px solid var(--line); transform: translateX(105%); transition: transform .35s cubic-bezier(.2,.7,.2,1); display: grid; align-content: start; gap: 18px;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) 24px; overflow-y: auto; }
+.drawer.on { transform: none; }
+.drawer h3 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; }
+.drawer label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+.drawer input { width: 100%; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); font-size: 16px; color: var(--ink); }
+.drawer input:focus { outline: none; border-color: var(--acc); }
+.note { font-size: 13px; color: var(--muted); padding: 12px 14px; border-radius: 12px; background: rgba(168,139,255,.08); }
+.note b { color: var(--ink); }
+.dq { display: grid; place-items: center; background: #fff; border-radius: 16px; padding: 18px; }
+.dq canvas { width: 180px; height: 180px; }
+.row { display: flex; gap: 8px; }
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 12px; font-weight: 600; opacity: 0; transition: .3s; z-index: 30; pointer-events: none; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .feed li, .bar .fill, .drawer, .scrim, .toast { animation: none; transition: none; } .live .ph h2::before { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><a class="logo" href="../">Načti<em>.me</em></a><span class="pro">PRO</span></div>
+    <div class="right"><span class="demo">Ukázková data</span><a class="btn ghost" href="../app/">Nový kód</a></div>
+  </header>
+
+  <section class="r1">
+    <div class="panel hero">
+      <div class="hero-top">
+        <div>
+          <div class="kick" id="rangeLabel">Naskenování za 30 dní</div>
+          <div class="big num" id="total">0</div>
+          <div><span class="delta num" id="delta">+0 %</span><span class="sub" id="deltaSub">oproti předchozímu období</span></div>
+        </div>
+        <div class="seg" role="group" aria-label="Období">
+          <button type="button" data-r="7" aria-pressed="false">7 dní</button>
+          <button type="button" data-r="30" aria-pressed="true">30 dní</button>
+          <button type="button" data-r="90" aria-pressed="false">90 dní</button>
+        </div>
+      </div>
+      <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
+      <div class="minis">
+        <div class="mini"><b class="num" id="mUnique">0</b><span>různých lidí</span></div>
+        <div class="mini"><b id="mBest">–</b><span>nejsilnější den</span></div>
+        <div class="mini"><b class="num" id="mActive">0</b><span>aktivních kódů</span></div>
+      </div>
+    </div>
+
+    <div class="panel live">
+      <div class="ph"><h2>Právě teď</h2><span>živě</span></div>
+      <ul class="feed" id="feed" aria-live="polite"></ul>
+    </div>
+  </section>
+
+  <section class="r2">
+    <div class="panel">
+      <div class="ph"><h2>Kdy vás lidé skenují</h2><span>den × hodina</span></div>
+      <div class="heat" id="heat"></div>
+      <div class="legend">méně <i style="background:var(--seq0)"></i><i style="background:var(--seq1)"></i><i style="background:var(--seq2)"></i><i style="background:var(--seq3)"></i><i style="background:var(--seq4)"></i><i style="background:var(--seq5)"></i> více</div>
+      <div class="insight" id="insight"></div>
+    </div>
+    <div class="split">
+      <div class="panel">
+        <div class="ph"><h2>Odkud</h2><span>města</span></div>
+        <div class="bars" id="cities"></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2>Čím</h2><span>zařízení</span></div>
+        <div class="bars" id="devices"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>Moje kódy</h2><span id="codesCount"></span></div>
+    <div class="codes" id="codes"></div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="dTitle">
+  <div class="row" style="justify-content:space-between;align-items:center"><span class="kick">Upravit kód</span><button class="btn ghost" type="button" id="dClose">Zavřít</button></div>
+  <h3 id="dTitle">Kód</h3>
+  <div class="dq"><canvas id="dQr" width="360" height="360"></canvas></div>
+  <label for="dName">Název<input id="dName" maxlength="60"></label>
+  <label for="dUrl">Kam kód vede<input id="dUrl" inputmode="url" spellcheck="false"></label>
+  <div class="note"><b>Kód se nemění.</b> Novou adresu uvidí každý, kdo naskenuje už vytištěné letáky, vizitky i samolepky. Okamžitě.</div>
+  <div class="row"><button class="btn" type="button" id="dSave">Uložit změnu</button></div>
+</aside>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fmt = (n) => n.toLocaleString('cs-CZ');
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+
+  // ---------- Ukázková data ----------
+  const CODES = [
+    { id: 'a', name: 'Leták – podzimní menu', type: 'Odkaz', url: 'https://kavarna-lom.cz/menu', w: 0.34, on: true },
+    { id: 'b', name: 'Vizitka Petra Nováková', type: 'Kontakt', url: 'https://nacti.me/k/petra', w: 0.22, on: true },
+    { id: 'c', name: 'Wi-Fi pro hosty', type: 'Wi-Fi', url: 'https://nacti.me/w/kavarna', w: 0.18, on: true },
+    { id: 'd', name: 'Recenze na Google', type: 'Odkaz', url: 'https://g.page/kavarna-lom/review', w: 0.14, on: true },
+    { id: 'e', name: 'Svatba Anna & Jakub – fotky', type: 'Fotky', url: 'https://nacti.me/f/?p=svatba', w: 0.08, on: true },
+    { id: 'f', name: 'QR platba – faktury', type: 'Platba', url: 'https://nacti.me/p/faktury', w: 0.04, on: false },
+  ];
+  const DAYS = 180, today = new Date(); today.setHours(0, 0, 0, 0);
+  const daily = [];
+  for (let i = DAYS - 1; i >= 0; i--) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const dow = d.getDay(), trend = 18 + (DAYS - i) * 0.16, wk = dow === 5 || dow === 6 ? 1.45 : dow === 0 ? 1.15 : 1;
+    daily.push({ d, v: Math.max(2, Math.round((trend + Math.sin(i / 5) * 6) * wk + rnd() * 10)) });
+  }
+  const perCode = CODES.map((c) => daily.map((p) => Math.round(p.v * c.w * (0.7 + rnd() * 0.6))));
+  const HOURS = [0.1, 0.05, 0.03, 0.02, 0.02, 0.05, 0.2, 0.5, 0.8, 0.9, 1, 1.1, 1.5, 1.3, 1, 0.9, 1, 1.3, 1.7, 1.9, 1.6, 1.1, 0.6, 0.3];
+  const DOWW = [1.15, 0.85, 0.9, 0.95, 1, 1.35, 1.45];
+  const CITIES = [['Praha', 0.41], ['Brno', 0.17], ['Ostrava', 0.09], ['Plzeň', 0.07], ['Olomouc', 0.05]];
+  const DEVICES = [['iPhone', 0.54], ['Android', 0.41], ['Ostatní', 0.05]];
+
+  // ---------- Hlavní graf ----------
+  let range = 30;
+  function sumRange(r, off = 0) { return daily.slice(DAYS - r - off, DAYS - off).reduce((a, p) => a + p.v, 0); }
+  function countUp(el, to) {
+    if (reduce) { el.textContent = fmt(to); return; }
+    const from = parseInt(el.textContent.replace(/\s/g, ''), 10) || 0, t0 = performance.now();
+    const step = (t) => { const k = Math.min(1, (t - t0) / 700), e = 1 - Math.pow(1 - k, 3); el.textContent = fmt(Math.round(from + (to - from) * e)); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+  function renderHero() {
+    const pts = daily.slice(DAYS - range), total = sumRange(range), prevT = sumRange(range, range);
+    const ch = Math.round((total - prevT) / prevT * 100);
+    $('rangeLabel').textContent = `Naskenování za ${range} dní`;
+    countUp($('total'), total);
+    $('delta').textContent = `${ch >= 0 ? '↑' : '↓'} ${Math.abs(ch)} %`; $('delta').classList.toggle('neg', ch < 0);
+    countUp($('mUnique'), Math.round(total * 0.71));
+    const best = pts.reduce((a, p) => (p.v > a.v ? p : a));
+    $('mBest').textContent = best.d.toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric' });
+    $('mActive').textContent = CODES.filter((c) => c.on).length;
+    drawArea(pts);
+  }
+  function drawArea(pts) {
+    const box = $('chart'), W = box.clientWidth, H = box.clientHeight, padB = 22, padT = 8;
+    const max = Math.max(...pts.map((p) => p.v)) * 1.12, n = pts.length;
+    const X = (i) => (i / (n - 1)) * W, Y = (v) => padT + (1 - v / max) * (H - padT - padB);
+    let line = ''; pts.forEach((p, i) => { line += (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.v).toFixed(1); });
+    const area = line + `L${W} ${H - padB}L0 ${H - padB}Z`;
+    const grid = [0.25, 0.5, 0.75].map((g) => `<line x1="0" x2="${W}" y1="${Y(max * g)}" y2="${Y(max * g)}" stroke="rgba(255,255,255,.06)" />`).join('');
+    const ticks = [0, Math.floor(n / 2), n - 1].map((i) => `<text x="${X(i)}" y="${H - 4}" fill="#9a96aa" font-size="11" font-family="Geist Mono, monospace" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${i === n - 1 ? 'dnes' : pts[i].d.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' })}</text>`).join('');
+    const last = pts[n - 1];
+    box.querySelector('svg')?.remove();
+    box.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Naskenování po dnech">
+      <defs><linearGradient id="ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#a88bff" stop-opacity=".45"/><stop offset="1" stop-color="#a88bff" stop-opacity="0"/></linearGradient></defs>
+      ${grid}<path d="${area}" fill="url(#ga)"/><path d="${line}" fill="none" stroke="#a88bff" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="${X(n - 1)}" cy="${Y(last.v)}" r="5" fill="#a88bff" stroke="#110f17" stroke-width="2"/>
+      ${ticks}<line id="cross" x1="0" x2="0" y1="${padT}" y2="${H - padB}" stroke="rgba(255,255,255,.35)" stroke-dasharray="3 3" opacity="0"/>
+      <circle id="dot" r="5" fill="#f4f2f8" stroke="#a88bff" stroke-width="2" opacity="0"/>
+      <rect x="0" y="0" width="${W}" height="${H}" fill="transparent" id="hit"/></svg>`);
+    const tip = $('tip'), hit = box.querySelector('#hit'), cross = box.querySelector('#cross'), dot = box.querySelector('#dot');
+    const move = (e) => {
+      const r = box.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left) / r.width) * (n - 1)))), p = pts[i];
+      cross.setAttribute('x1', X(i)); cross.setAttribute('x2', X(i)); cross.setAttribute('opacity', 1);
+      dot.setAttribute('cx', X(i)); dot.setAttribute('cy', Y(p.v)); dot.setAttribute('opacity', 1);
+      tip.innerHTML = `<b class="num">${fmt(p.v)}</b><span>${p.d.toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long' })}</span>`;
+      tip.style.left = (X(i) / W * r.width) + 'px'; tip.style.top = (Y(p.v) / H * r.height) + 'px'; tip.style.opacity = 1;
+    };
+    hit.addEventListener('pointermove', move); hit.addEventListener('pointerdown', move);
+    hit.addEventListener('pointerleave', () => { tip.style.opacity = 0; cross.setAttribute('opacity', 0); dot.setAttribute('opacity', 0); });
+  }
+  document.querySelectorAll('[data-r]').forEach((b) => b.addEventListener('click', () => {
+    range = +b.dataset.r; document.querySelectorAll('[data-r]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); renderHero(); renderCodes();
+  }));
+
+  // ---------- Heatmapa ----------
+  function renderHeat() {
+    const names = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'], order = [1, 2, 3, 4, 5, 6, 0];
+    const vals = order.map((dw) => HOURS.map((h) => h * DOWW[dw] * (0.85 + rnd() * 0.3)));
+    const max = Math.max(...vals.flat()), seq = ['--seq0', '--seq1', '--seq2', '--seq3', '--seq4', '--seq5'];
+    let html = '', best = { v: 0 };
+    order.forEach((dw, r) => {
+      html += `<span class="d">${names[dw]}</span>`;
+      vals[r].forEach((v, h) => {
+        const k = Math.min(5, Math.floor((v / max) * 5.999)), cnt = Math.round(v * 9);
+        if (v > best.v) best = { v, dw, h };
+        html += `<span class="c" style="background:var(${seq[k]})" title="${names[dw]} ${h}:00–${h + 1}:00 · ${cnt} skenů"></span>`;
+      });
+    });
+    html += '<span></span>' + HOURS.map((_, h) => `<span class="h">${h % 6 === 0 ? h : ''}</span>`).join('');
+    $('heat').innerHTML = html;
+    const full = ['neděli', 'pondělí', 'úterý', 'středu', 'čtvrtek', 'pátek', 'sobotu'];
+    $('insight').innerHTML = `<span class="kick">Tip</span><span>Nejvíc lidí skenuje v <b>${full[best.dw]} kolem ${best.h}:00</b>. Novinky vyvěste den předem.</span>`;
+  }
+
+  // ---------- Pruhy ----------
+  function renderBars(id, rows) {
+    $(id).innerHTML = rows.map(([l, p]) => `<div class="bar"><div class="lbl"><span>${l}</span><span class="num">${Math.round(p * 100)} %</span></div><div class="track"><div class="fill" data-w="${p}"></div></div></div>`).join('');
+    requestAnimationFrame(() => $(id).querySelectorAll('.fill').forEach((f) => { f.style.width = (f.dataset.w / rows[0][1] * 100) + '%'; }));
+  }
+
+  // ---------- Kódy ----------
+  if (window.qrcode && qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs['UTF-8']) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+  function qrTo(canvas, text) {
+    if (!window.qrcode) return;
+    const q = qrcode(0, 'M'); q.addData(text, 'Byte'); q.make();
+    const n = q.getModuleCount(), S = canvas.width, pad = 2, cell = S / (n + pad * 2), x = canvas.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, S, S); x.fillStyle = '#111013';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) x.fillRect(Math.floor((c + pad) * cell), Math.floor((r + pad) * cell), Math.ceil(cell), Math.ceil(cell));
+  }
+  const ICON = { 'Odkaz': '↗', 'Kontakt': '☺', 'Wi-Fi': '≋', 'Fotky': '◐', 'Platba': 'Kč' };
+  function spark(arr) {
+    const W = 110, H = 34, max = Math.max(...arr, 1), n = arr.length;
+    const d = arr.map((v, i) => (i ? 'L' : 'M') + (i / (n - 1) * W).toFixed(1) + ' ' + (H - 3 - v / max * (H - 6)).toFixed(1)).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${d}" fill="none" stroke="#a88bff" stroke-width="1.6" stroke-linejoin="round"/><circle cx="${W}" cy="${(H - 3 - arr[n - 1] / max * (H - 6)).toFixed(1)}" r="2.5" fill="#a88bff"/></svg>`;
+  }
+  function renderCodes() {
+    $('codesCount').textContent = `${CODES.length} kódů`;
+    const sorted = CODES.map((c, i) => ({ c, s: perCode[i].slice(DAYS - range).reduce((a, b) => a + b, 0), arr: perCode[i].slice(DAYS - Math.min(range, 30)) })).sort((a, b) => b.s - a.s);
+    $('codes').innerHTML = sorted.map(({ c, s, arr }) => `
+      <article class="code ${c.on ? '' : 'off'}" data-id="${c.id}">
+        <canvas width="112" height="112" data-qr="${c.id}" aria-hidden="true"></canvas>
+        <div class="n"><b>${c.name}</b><span><span class="chip">${c.type}</span>${c.url.replace(/^https?:\/\//, '')}</span></div>
+        <div class="s"><b class="num">${fmt(s)}</b><span>skenů za ${range} dní</span></div>
+        ${spark(arr)}
+        <div class="acts">
+          <button class="sw" type="button" role="switch" aria-checked="${c.on}" aria-label="Kód ${c.name} zapnutý" data-sw="${c.id}"></button>
+          <button class="btn ghost" type="button" data-edit="${c.id}">Upravit</button>
+        </div>
+      </article>`).join('');
+    CODES.forEach((c) => { const cv = document.querySelector(`[data-qr="${c.id}"]`); if (cv) qrTo(cv, 'https://nacti.me/q/' + c.id); });
+    document.querySelectorAll('[data-sw]').forEach((b) => b.addEventListener('click', () => {
+      const c = CODES.find((x) => x.id === b.dataset.sw); c.on = !c.on; renderCodes(); renderHero();
+      toast(c.on ? 'Kód je znovu aktivní' : 'Kód je pozastavený');
+    }));
+    document.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => openDrawer(b.dataset.edit)));
+    document.querySelectorAll('.code .n').forEach((n) => n.addEventListener('click', () => openDrawer(n.closest('.code').dataset.id)));
+  }
+
+  // ---------- Úprava cíle ----------
+  let editing = null;
+  function openDrawer(id) {
+    editing = CODES.find((c) => c.id === id);
+    $('dTitle').textContent = editing.name; $('dName').value = editing.name; $('dUrl').value = editing.url;
+    qrTo($('dQr'), 'https://nacti.me/q/' + editing.id);
+    $('drawer').classList.add('on'); $('scrim').classList.add('on'); $('drawer').setAttribute('aria-hidden', 'false');
+    setTimeout(() => $('dUrl').focus(), 300);
+  }
+  function closeDrawer() { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); $('drawer').setAttribute('aria-hidden', 'true'); }
+  $('dClose').addEventListener('click', closeDrawer); $('scrim').addEventListener('click', closeDrawer);
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+  $('dSave').addEventListener('click', () => {
+    if (!editing) return;
+    let u = $('dUrl').value.trim(); if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
+    editing.url = u || editing.url; editing.name = $('dName').value.trim() || editing.name;
+    renderCodes(); closeDrawer(); toast('Uloženo. Vytištěné kódy už vedou na novou adresu.');
+  });
+  let tt; function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2600); }
+
+  // ---------- Živý proud ----------
+  const feed = $('feed'), DEV = ['iPhone', 'Android', 'iPhone', 'Android', 'iPhone'];
+  function pick(arr) { let r = rnd(), a = 0; for (const [k, w] of arr) { a += w; if (r <= a) return k; } return arr[0][0]; }
+  function addScan(ago) {
+    const live = CODES.filter((c) => c.on), c = pick(live.map((x) => [x, x.w / live.reduce((s, y) => s + y.w, 0)]));
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="ico">${ICON[c.type]}</span><div class="t"><b>${c.name}</b><span>${pick(CITIES)} · ${DEV[Math.floor(rnd() * DEV.length)]}</span></div><time data-t="${Date.now() - ago * 1000}"></time>`;
+    feed.prepend(li); while (feed.children.length > 7) feed.lastChild.remove(); stamp();
+  }
+  function stamp() { feed.querySelectorAll('time').forEach((t) => { const s = Math.round((Date.now() - +t.dataset.t) / 1000); t.textContent = s < 10 ? 'teď' : s < 60 ? `před ${s} s` : `před ${Math.round(s / 60)} min`; }); }
+  [600, 420, 300, 190, 95, 40, 4].forEach((a) => addScan(a));
+  if (!reduce) setInterval(() => { addScan(0); const t = $('total'); t.textContent = fmt((parseInt(t.textContent.replace(/\s/g, ''), 10) || 0) + 1); }, 6500);
+  setInterval(stamp, 5000);
+
+  // ---------- Start ----------
+  renderHero(); renderHeat(); renderBars('cities', CITIES); renderBars('devices', DEVICES); renderCodes();
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderHero, 120); });
+})();
+</script>
+
+</body>
+</html>
