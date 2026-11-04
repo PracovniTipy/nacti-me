@@ -68,7 +68,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
 /* Kód */
 .code { position: relative; width: 100%; aspect-ratio: 1; background: var(--paper); border-radius: 22px; box-shadow: var(--shadow); }
-.code canvas, .code img { position: absolute; inset: 7%; width: 86%; height: 86%; display: block; }
+.code canvas { position: absolute; inset: 1.5%; width: 97%; height: 97%; display: block; }
+.code img { position: absolute; inset: 1.5%; width: 97%; height: 97%; display: block; border-radius: 20px; }
 .code img { opacity: 0; -webkit-touch-callout: default; }
 .code img.ready { opacity: 1; }
 .code .idle { position: absolute; inset: 0; display: grid; place-items: center; color: #9a9aa0; font-size: 14px; text-align: center; padding: 20%; }
@@ -369,7 +370,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   function drawQr(next, t) {
     sizeCanvas();
     const W = cv.width; ctx.clearRect(0, 0, W, W); ctx.fillStyle = ink;
-    const n = next.n, cell = W / n, mid = (n - 1) / 2, maxD = Math.hypot(mid, mid), same = prev && prev.n === n;
+    const n = next.n, cell = W / (n + QUIET * 2), o0 = QUIET * cell, mid = (n - 1) / 2, maxD = Math.hypot(mid, mid), same = prev && prev.n === n;
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
       const on = next.m[r * n + c], was = same ? prev.m[r * n + c] : 0;
       if (!on && !was) continue;
@@ -380,21 +381,38 @@ button, input, textarea, select { font: inherit; color: inherit; }
       }
       if (s <= 0.01) continue;
       const size = cell * s, off = (cell - size) / 2;
-      ctx.fillRect(Math.floor(c * cell + off), Math.floor(r * cell + off), Math.ceil(size), Math.ceil(size));
+      ctx.fillRect(Math.floor(o0 + c * cell + off), Math.floor(o0 + r * cell + off), Math.ceil(size), Math.ceil(size));
     }
   }
+  // Podpis v pravém dolním rohu bílého čtverce. Okraj 5 modulů, podpis zabírá jen spodní 2,
+  // takže kolem kódu zůstává volné pole, které čtečky potřebují.
+  const QUIET = 5;
+  function drawSig(x, W, H, m) {
+    const big = m * 1.25, small = big * 0.68, pad = m * 1.3;
+    x.textBaseline = 'alphabetic';
+    x.font = `600 ${big}px "Geist", "Helvetica Neue", Arial, sans-serif`;
+    const w2 = x.measureText('nacti.me').width;
+    x.font = `400 ${small}px "Geist", "Helvetica Neue", Arial, sans-serif`;
+    const w1 = x.measureText('www.').width;
+    const xr = W - pad, yb = H - pad;
+    x.globalAlpha = 0.5; x.fillText('www.', xr - w2 - w1, yb);
+    x.globalAlpha = 0.85; x.font = `600 ${big}px "Geist", "Helvetica Neue", Arial, sans-serif`; x.fillText('nacti.me', xr - w2, yb);
+    x.globalAlpha = 1;
+  }
   function exportPng(next) {
-    const quiet = 4, total = next.n + quiet * 2, scale = Math.ceil(1200 / total);
+    const quiet = QUIET, total = next.n + quiet * 2, scale = Math.ceil(1200 / total);
     const c = document.createElement('canvas'); c.width = c.height = total * scale;
     const x = c.getContext('2d'); x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height); x.fillStyle = ink;
     for (let r = 0; r < next.n; r++) for (let col = 0; col < next.n; col++) if (next.m[r * next.n + col]) x.fillRect((col + quiet) * scale, (r + quiet) * scale, scale, scale);
+    drawSig(x, c.width, c.height, scale);
     img.src = c.toDataURL('image/png'); img.classList.add('ready');
     pngCanvas = c; setSaveEnabled(true);
   }
   function svgOf(next) {
-    const q = 4, t = next.n + q * 2; let d = '';
+    const q = QUIET, t = next.n + q * 2; let d = '';
     for (let r = 0; r < next.n; r++) for (let c = 0; c < next.n; c++) if (next.m[r * next.n + c]) d += `M${c + q} ${r + q}h1v1h-1z`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" width="1024" height="1024" shape-rendering="crispEdges"><rect width="${t}" height="${t}" fill="#ffffff"/><path fill="${ink}" d="${d}"/></svg>`;
+    const sig = `<text x="${t - 1.3}" y="${t - 1.3}" text-anchor="end" font-family="Geist, 'Helvetica Neue', Arial, sans-serif" fill="${ink}"><tspan font-size="0.85" opacity="0.5">www.</tspan><tspan font-size="1.25" font-weight="600" opacity="0.85">nacti.me</tspan></text>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" width="1024" height="1024"><rect width="${t}" height="${t}" fill="#ffffff"/><path fill="${ink}" d="${d}" shape-rendering="crispEdges"/>${sig}</svg>`;
   }
   function show(next) {
     cancelAnimationFrame(anim); clearTimeout(exportTimer);
@@ -415,7 +433,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   }
 
   // Minimální velikost tisku: modul aspoň 0,4 mm, okraj 4 moduly
-  const minPrintCm = (n) => ((n + 8) * 0.4 / 10);
+  const minPrintCm = (n) => ((n + QUIET * 2) * 0.4 / 10);
   const cm = (v) => v.toLocaleString('cs-CZ', { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + ' cm';
 
   function update() {
