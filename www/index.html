@@ -242,6 +242,7 @@ footer a { color: var(--muted); }
   const P = matrix('SPD*1.0*ACC:CZ6508000000192000145399*AM:1250.00*CC:CZK*X-VS:2026001*MSG:Faktura 2026001');
 
   // Rozházené čtverečky pro úvodní skládání
+  let capTop = 0;
   let seed = 42; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const parts = [];
   for (let r = 0; r < A.n; r++) for (let c = 0; c < A.n; c++) if (A.m[r * A.n + c]) {
@@ -293,6 +294,7 @@ footer a { color: var(--muted); }
 
   function draw() {
     if (!W) return;
+    const capsEl = document.querySelector('.caps');
     const p = prog;
     const t1 = ease(seg(p, 0.02, 0.22));   // skládání kódu
     const t2 = ease(seg(p, 0.25, 0.44));   // vizitka
@@ -302,12 +304,16 @@ footer a { color: var(--muted); }
     $('hint').style.opacity = p > 0.03 ? 0 : 1;
 
     const wide = W > 860;
+    // Na telefonu se scéna vejde pod nejvyšší text, aby se nepřekrývaly
+    const capB = wide ? 0 : (capsEl ? capsEl.getBoundingClientRect().bottom : H * 0.4);
+    capTop = capB;
+    const room = Math.max(H - capB - 56, H * 0.3);
     const cx = wide ? W * 0.62 : W / 2;
-    const cy = wide ? H / 2 : H * 0.62;
 
     // Rozměry
     const cw = Math.min(wide ? W * 0.5 : W * 0.88, 640), ch = cw * 55 / 85;
-    const qa = Math.min(wide ? Math.min(W * 0.4, H * 0.62) : Math.min(W * 0.72, H * 0.42), 520);
+    const qa = Math.min(wide ? Math.min(W * 0.4, H * 0.62) : Math.min(W * 0.72, H * 0.42, room * 0.78), 520);
+    const cy = wide ? H / 2 : Math.min(Math.max(H * 0.62, capB + 28 + qa * 0.62), H - qa * 0.5 - 40);
     const qs = ch * 0.66, ox = cw / 2 - ch * 0.17 - qs / 2;
     const zoom = lerp(1, wide ? 1.12 : 1.06, t3) * lerp(1, 1 / (wide ? 1.12 : 1.06), t4);
     const ccx = cx;
@@ -386,10 +392,12 @@ footer a { color: var(--muted); }
     x.fillStyle = col;
     if (scatter && build < 1) {
       const span = Math.max(W, H);
+      // Na telefonu nelétají moduly přes text nahoře
+      const upK = W > 860 ? 1 : clamp((cyq - capTop - 12) / (0.7 * span), 0, 1);
       for (const q of parts) {
         const local = clamp((build * 1.6 - q.d * 0.6), 0, 1), e = easeOut(local);
         const tx = x0 + q.c * cell + cell / 2, ty = y0 + q.r * cell + cell / 2;
-        const px = lerp(cxq + q.ax * span * 0.6, tx, e), py = lerp(cyq + q.ay * span * 0.6, ty, e);
+        const px = lerp(cxq + q.ax * span * 0.6, tx, e), py = lerp(cyq + q.ay * span * 0.6 * (q.ay < 0 ? upK : 1), ty, e);
         const s = cell * lerp(q.sc, 1, e) * (0.86 + 0.14 * e) * vis, rot = q.rot * (1 - e);
         x.globalAlpha = lerp(0.35, 1, e) * vis;
         x.save(); x.translate(px, py); x.rotate(rot); x.fillRect(-s / 2, -s / 2, s, s); x.restore();
