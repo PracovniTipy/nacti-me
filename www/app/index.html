@@ -187,7 +187,8 @@ body { background: var(--bg); font-size: 16px; position: relative; overflow-x: h
 body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
   background: radial-gradient(40vmax 40vmax at 20% 10%, rgba(139,61,255,.45), transparent 60%),
               radial-gradient(35vmax 35vmax at 90% 60%, rgba(255,61,139,.32), transparent 60%);
-  filter: blur(30px); animation: drift 18s ease-in-out infinite alternate; }
+  animation: drift 18s ease-in-out infinite alternate; }
+/* Výkon: přechody jsou už měkké, filter: blur na animované vrstvě přes celou obrazovku stál každý snímek a nutil přepočítávat všechny backdrop-filter. */
 @keyframes drift { to { transform: translate3d(-4%, 3%, 0) scale(1.08); } }
 .app { gap: 24px; padding-block: 18px 64px; }
 .mark { font-family: var(--sans); letter-spacing: 0; text-transform: none; align-items: center; }

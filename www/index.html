@@ -71,13 +71,15 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 /* Příběh */
 .story { position: relative; height: 560vh; }
 .stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; }
+/* Výkon: záře a zrno jsou jedna statická vrstva pod plátnem – rozmazání a prolnutí se vykreslí jednou, ne při každém snímku. */
+.bgfx { position: absolute; inset: 0; isolation: isolate; overflow: hidden; will-change: transform; pointer-events: none; }
 .glow { position: absolute; inset: -20%; pointer-events: none; transition: background 1.2s ease; }
 .glow::before, .glow::after { content: ""; position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.55; }
 .glow::before { width: 60vmax; height: 60vmax; left: var(--gx, 45%); top: 18%; background: radial-gradient(circle, var(--g1), transparent 65%); transition: background 1.2s ease; }
 .glow::after { width: 45vmax; height: 45vmax; left: calc(var(--gx, 45%) + 18%); top: 48%; background: radial-gradient(circle, var(--g2), transparent 65%); transition: background 1.2s ease; }
 .grain { position: absolute; inset: 0; pointer-events: none; opacity: .07; mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
-#cv { position: absolute; inset: 0; width: 100%; height: 100%; transform-style: preserve-3d; will-change: transform; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; will-change: transform; }
 
 .caps { position: absolute; z-index: 3; left: max(20px, env(safe-area-inset-left, 0px)); top: 0; bottom: 0; width: min(440px, 40vw); display: grid; align-items: center; pointer-events: none; }
 .cap { grid-area: 1 / 1; display: grid; gap: 18px; opacity: 0; transform: translateY(24px); transition: opacity .5s ease, transform .6s cubic-bezier(.2,.7,.2,1); }
@@ -99,7 +101,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   position: absolute; z-index: 2; left: var(--px); top: var(--py); width: var(--pw); aspect-ratio: 9 / 19.2;
   transform: translate(-50%, -50%) translateY(var(--poff, 120vh)); border-radius: calc(var(--pw) * 0.16);
   border: calc(var(--pw) * 0.035) solid #0e0d14; box-shadow: 0 0 0 1.5px rgba(255,255,255,.18), 0 60px 120px -30px rgba(0,0,0,.9), 0 0 80px -10px var(--g1);
-  overflow: hidden; pointer-events: none;
+  overflow: hidden; pointer-events: none; will-change: transform;
 }
 .phone .notch { position: absolute; top: 3.5%; left: 50%; width: 30%; height: 3.4%; transform: translateX(-50%); background: #0e0d14; border-radius: 99px; z-index: 2; }
 .phone .frame { position: absolute; left: 50%; top: 50%; width: var(--fw); aspect-ratio: 1; transform: translate(-50%, -50%); box-shadow: 0 0 0 999px rgba(7, 6, 10, .55); border-radius: 18px; }
@@ -110,6 +112,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .phone .frame b:nth-child(4) { right: -2px; bottom: -2px; border-left: 0; border-top: 0; border-radius: 0 0 16px 0; }
 .phone .scan { position: absolute; left: 4%; right: 4%; height: 2px; top: 10%; background: linear-gradient(90deg, transparent, #fff, transparent); box-shadow: 0 0 18px 2px rgba(255,255,255,.7); animation: scan 1.6s ease-in-out infinite alternate; }
 @keyframes scan { to { top: 88%; } }
+.phone:not(.vis) .scan { animation-play-state: paused; }
 .toast {
   position: absolute; left: 8%; right: 8%; bottom: 7%; padding: 12px 14px; border-radius: 16px; display: flex; gap: 10px; align-items: center;
   background: rgba(28, 27, 36, .92); border: 1px solid var(--line); font-size: 13px; line-height: 1.3;
@@ -171,14 +174,13 @@ footer a { color: var(--muted); }
 
 <section class="story" id="story" aria-label="Jak Načti.me funguje">
   <div class="stage">
-    <div class="glow" id="glow"></div>
+    <div class="bgfx"><div class="glow" id="glow"></div><div class="grain"></div></div>
     <canvas id="cv" aria-hidden="true"></canvas>
     <div class="phone" id="phone" aria-hidden="true">
       <div class="notch"></div>
       <div class="frame"><b></b><b></b><b></b><b></b><div class="scan"></div></div>
       <div class="toast" id="toast"><i>✓</i><div>Kontakt uložen<small>Petra Nováková · Atelier Lom</small></div></div>
     </div>
-    <div class="grain"></div>
     <div class="caps">
       <div class="cap on" data-i="0">
         <span class="kick">01 — Cokoli</span>
@@ -255,13 +257,39 @@ footer a { color: var(--muted); }
 
   // ---------- Plátno ve vysokém rozlišení ----------
   const cv = $('cv'), x = cv.getContext('2d');
-  let W = 0, H = 0, DPR = 1;
+  let W = 0, H = 0, DPR = 1, SHK = 1, capB0 = 0;
+  // Výkon: plátno max. 2× (3× na telefonech bylo 2,25× víc pixelů každý snímek, rozdíl okem nepoznáš).
   function resize() {
     const r = cv.getBoundingClientRect(); W = r.width; H = r.height;
-    DPR = Math.min(window.devicePixelRatio || 1, 3);
-    if (W * H * DPR * DPR > 2.2e7) DPR = Math.sqrt(2.2e7 / (W * H));
+    let d0 = Math.min(window.devicePixelRatio || 1, 3);
+    if (W * H * d0 * d0 > 2.2e7) d0 = Math.sqrt(2.2e7 / (W * H));
+    DPR = Math.min(d0, 2);
+    SHK = DPR / d0; // stín vizitky byl v pixelech zařízení – zachovat stejnou velikost
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    measure();
     draw(true);
+  }
+  // Rozměry, které se mění jen při změně velikosti: čteme je tady, ne v každém snímku (žádný vynucený layout při rolování).
+  function measure() {
+    const capsEl = document.querySelector('.caps');
+    const sr = cv.getBoundingClientRect();
+    capB0 = capsEl ? capsEl.getBoundingClientRect().bottom - sr.top : H * 0.4;
+    storyTop = story.getBoundingClientRect().top + scrollY;
+    storyTotal = story.offsetHeight - innerHeight;
+  }
+  // Stín vizitky předkreslený jednou (shadowBlur 80 při každém snímku byl nejdražší operace na plátně).
+  let shSprite = null, shKey = '', shE = 0;
+  function cardShadow(w0, h0, r0) {
+    const key = [w0, h0, DPR, SHK].join('|');
+    if (key === shKey) return shSprite;
+    const blur = 80 * SHK, off = 40 * SHK; shE = Math.ceil(blur * 1.6 + off);
+    const c = document.createElement('canvas'), dw = w0 * DPR, dh = h0 * DPR;
+    c.width = Math.ceil(dw + shE * 2); c.height = Math.ceil(dh + shE * 2);
+    const g = c.getContext('2d'), far = c.width + 50;
+    g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = blur; g.shadowOffsetY = off; g.shadowOffsetX = far;
+    g.fillStyle = '#000'; const X = shE - far, Y = shE, rd = r0 * DPR;
+    g.beginPath(); g.moveTo(X + rd, Y); g.arcTo(X + dw, Y, X + dw, Y + dh, rd); g.arcTo(X + dw, Y + dh, X, Y + dh, rd); g.arcTo(X, Y + dh, X, Y, rd); g.arcTo(X, Y, X + dw, Y, rd); g.closePath(); g.fill();
+    shSprite = c; shKey = key; return c;
   }
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -274,10 +302,10 @@ footer a { color: var(--muted); }
 
   // ---------- Stav podle rolování ----------
   const story = $('story');
+  let storyTop = 0, storyTotal = 1;
   let target = 0, prog = 0, pointerX = 0, pointerY = 0, tiltX = 0, tiltY = 0;
   function readScroll() {
-    const r = story.getBoundingClientRect(), total = story.offsetHeight - innerHeight;
-    target = clamp(-r.top / total, 0, 1);
+    target = clamp((scrollY - storyTop) / storyTotal, 0, 1);
   }
 
   const SCENES = [
@@ -297,18 +325,17 @@ footer a { color: var(--muted); }
 
   function draw() {
     if (!W) return;
-    const capsEl = document.querySelector('.caps');
     const p = prog;
     const t1 = ease(seg(p, 0.02, 0.22));   // skládání kódu
     const t2 = ease(seg(p, 0.25, 0.44));   // vizitka
     const t3 = ease(seg(p, 0.48, 0.66));   // telefon
     const t4 = ease(seg(p, 0.72, 0.9));    // platba
     setScene(p < 0.24 ? 0 : p < 0.47 ? 1 : p < 0.71 ? 2 : 3);
-    $('hint').style.opacity = p > 0.03 ? 0 : 1;
+    const hOp = p > 0.03 ? '0' : '1'; if (hOp !== lastHint) { lastHint = hOp; hintEl.style.opacity = hOp; }
 
     const wide = W > 860;
     // Na telefonu se scéna vejde pod nejvyšší text, aby se nepřekrývaly
-    const capB = wide ? 0 : (capsEl ? capsEl.getBoundingClientRect().bottom : H * 0.4);
+    const capB = wide ? 0 : capB0;
     capTop = capB;
     const room = Math.max(H - capB - 56, H * 0.3);
     const cx = wide ? W * 0.62 : W / 2;
@@ -330,8 +357,8 @@ footer a { color: var(--muted); }
     const bump = Math.sin(t2 * Math.PI) * (1 - t3);
     const rx = 14 * bump + tiltX + 6 * Math.sin(t4 * Math.PI);
     const ry = -22 * bump + tiltY - 10 * Math.sin(t4 * Math.PI);
-    cv.style.transformOrigin = `${cx}px ${cy}px`;
-    cv.style.transform = `perspective(1400px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
+    const to = `${cx}px ${cy}px`; if (to !== lastTO) { lastTO = to; cv.style.transformOrigin = to; }
+    const tf = `perspective(1400px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`; if (tf !== lastTF) { lastTF = tf; cv.style.transform = tf; }
 
     x.setTransform(DPR, 0, 0, DPR, 0, 0);
     x.clearRect(0, 0, W, H);
@@ -339,8 +366,10 @@ footer a { color: var(--muted); }
     // Vizitka
     if (t2 > 0.001) {
       const k = zoom * (cw / 640), w = cw * zoom, h = ch * zoom, X = ccx - w / 2, Y = ccy - h / 2 + (1 - t2) * 60;
-      x.save(); x.globalAlpha = t2;
-      x.shadowColor = 'rgba(0,0,0,0.55)'; x.shadowBlur = 80; x.shadowOffsetY = 40;
+      const sp = cardShadow(cw, ch, 14 * (cw / 640)), s = zoom;
+      x.save(); x.globalAlpha = t2; x.setTransform(1, 0, 0, 1, 0, 0);
+      x.drawImage(sp, X * DPR - shE * s, Y * DPR - shE * s, sp.width * s, sp.height * s);
+      x.setTransform(DPR, 0, 0, DPR, 0, 0);
       x.fillStyle = '#fbfaf7'; rr(X, Y, w, h, 14 * k); x.fill(); x.restore();
       x.save(); x.globalAlpha = t2;
       // Akcentní pruh se mění pro platbu
@@ -372,15 +401,22 @@ footer a { color: var(--muted); }
     if (t4 > 0) drawMatrix(P, qx, qy, qsz, 1, seg(t4, 0.35, 1), inkCol, false);
 
     // Telefon
-    const ph = $('phone');
     const pw = Math.min(qsz * 1.55, wide ? 340 : W * 0.62);
     const inT = easeOut(seg(p, 0.5, 0.6)), outT = ease(seg(p, 0.7, 0.77));
     const off = (1 - inT) * (H * 1.1) + outT * (H * 1.1);
-    ph.style.setProperty('--px', qx + 'px'); ph.style.setProperty('--py', qy + 'px'); ph.style.setProperty('--pw', pw + 'px');
-    ph.style.setProperty('--poff', off + 'px'); ph.style.setProperty('--fw', (qsz * 1.08 / pw * 100).toFixed(1) + '%');
-    ph.querySelector('.frame').style.width = (qsz * 1.12) + 'px';
-    $('toast').classList.toggle('on', p > 0.6 && p < 0.72);
+    // Telefon mimo obrazovku neměníme (každá změna = nový layout); jinak zapisujeme jen změněné hodnoty.
+    const phKey = off >= H * 1.1 - 0.5 ? 'away' : [qx, qy, pw, off, qsz].map((v) => v.toFixed(1)).join('|');
+    if (phKey !== lastPh || !phInit) {
+      phInit = true; lastPh = phKey; ph.classList.toggle('vis', phKey !== 'away');
+      ph.style.setProperty('--px', qx + 'px'); ph.style.setProperty('--py', qy + 'px'); ph.style.setProperty('--pw', pw + 'px');
+      ph.style.setProperty('--poff', off + 'px'); ph.style.setProperty('--fw', (qsz * 1.08 / pw * 100).toFixed(1) + '%');
+      phFrame.style.width = (qsz * 1.12) + 'px';
+    }
+    const tOn = p > 0.6 && p < 0.72; if (tOn !== lastToast) { lastToast = tOn; toastEl.classList.toggle('on', tOn); }
   }
+
+  const ph = $('phone'), phFrame = ph.querySelector('.frame'), toastEl = $('toast'), hintEl = $('hint');
+  let lastHint = '', lastTO = '', lastTF = '', lastPh = '', phInit = false, lastToast = null;
 
   function mixCol(a, b, t) {
     const h = (s, i) => parseInt(s.slice(i, i + 2), 16);
@@ -403,8 +439,10 @@ footer a { color: var(--muted); }
         const px = lerp(cxq + q.ax * span * 0.6, tx, e), py = lerp(cyq + q.ay * span * 0.6 * (q.ay < 0 ? upK : 1), ty, e);
         const s = cell * lerp(q.sc, 1, e) * (0.86 + 0.14 * e) * vis, rot = q.rot * (1 - e);
         x.globalAlpha = lerp(0.35, 1, e) * vis;
-        x.save(); x.translate(px, py); x.rotate(rot); x.fillRect(-s / 2, -s / 2, s, s); x.restore();
+        const co = Math.cos(rot) * DPR, si = Math.sin(rot) * DPR;
+        x.setTransform(co, si, -si, co, px * DPR, py * DPR); x.fillRect(-s / 2, -s / 2, s, s);
       }
+      x.setTransform(DPR, 0, 0, DPR, 0, 0);
       x.globalAlpha = 1;
       return;
     }
@@ -431,11 +469,13 @@ footer a { color: var(--muted); }
   }
   const kick = () => { if (!raf) raf = requestAnimationFrame(loop); };
   addEventListener('scroll', () => { readScroll(); kick(); }, { passive: true });
-  addEventListener('resize', () => { resize(); readScroll(); kick(); });
+  let rzT = 0;
+  addEventListener('resize', () => { cancelAnimationFrame(rzT); rzT = requestAnimationFrame(() => { resize(); readScroll(); kick(); }); });
   if (!reduce && matchMedia('(hover: hover)').matches) {
     addEventListener('pointermove', (e) => { pointerX = e.clientX / innerWidth - 0.5; pointerY = e.clientY / innerHeight - 0.5; kick(); }, { passive: true });
   }
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); readScroll(); draw(); });
+  addEventListener('load', () => { measure(); readScroll(); kick(); });
   resize(); readScroll(); prog = target; draw();
 })();
 </script>
