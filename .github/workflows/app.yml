@@ -53,7 +53,11 @@ jobs:
           $W r2 bucket create nacti-fotky 2>/dev/null || true
           $W d1 execute nacti-eu --remote --file schema.sql -y
           $W deploy | tee deploy.log
-          for k in ANTHROPIC_API_KEY STRIPE_SECRET_KEY; do v=$(printf '%s' "${!k}" | tr -d '[:space:]'); if [ -n "$v" ]; then printf '%s' "$v" | $W secret put "$k"; fi; done
+          AK=$(printf '%s' "$ANTHROPIC_API_KEY" | grep -oE 'sk-ant-[A-Za-z0-9_-]{20,}' | head -1 || true)
+          SK=$(printf '%s' "$STRIPE_SECRET_KEY" | grep -oE '(sk|rk)_(live|test)_[A-Za-z0-9]{20,}' | head -1 || true)
+          echo "AI klíč nalezen: $([ -n "$AK" ] && echo ano || echo ne), Stripe klíč nalezen: $([ -n "$SK" ] && echo ano || echo ne)"
+          if [ -n "$AK" ]; then echo "::add-mask::$AK"; printf '%s' "$AK" | $W secret put ANTHROPIC_API_KEY; fi
+          if [ -n "$SK" ]; then echo "::add-mask::$SK"; printf '%s' "$SK" | $W secret put STRIPE_SECRET_KEY; fi
           URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)
           echo "API: $URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
