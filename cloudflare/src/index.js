@@ -123,7 +123,10 @@ async function design(req, env) {
   if (!env.ANTHROPIC_API_KEY) return err(req, "not_configured", 503);
   let body; try { body = await req.json(); } catch { return err(req, "bad_json", 400); }
   const a = await account(req, env);
-  if (!isPro(a) && !(await hit(env, "ai", ip(req), FREE_AI_DAILY))) return err(req, "rate_limited", 429);
+  const counted = !isPro(a);
+  if (counted && !(await hit(env, "ai", ip(req), FREE_AI_DAILY))) return err(req, "rate_limited", 429);
+  // nepovedený návrh se do denního limitu nepočítá
+  const refund = () => counted && env.DB.prepare("UPDATE usage SET n = n - 1 WHERE kind = 'ai' AND ip = ?1 AND day = ?2 AND n > 0").bind(ip(req), today()).run();
 
   const format = LAYOUTS[body?.format] ? body.format : "card";
   const brief = clip(body?.brief, 400);
@@ -156,11 +159,12 @@ Odpověz POUZE JSON: {"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#r
   if (!r.ok) {
     const t = await r.text(); console.error(t);
     let why = ""; try { const e = JSON.parse(t).error; why = `${r.status} ${e?.type || ""}: ${e?.message || ""}`.slice(0, 200); } catch { why = String(r.status); }
+    await refund();
     return json(req, { error: "ai_failed", detail: why }, 502);
   }
   const out = await r.json();
   const m = (out?.content || []).map((x) => x.text || "").join("").match(/\{[\s\S]*\}/);
-  try { return json(req, JSON.parse(m[0])); } catch { return err(req, "ai_failed", 502); }
+  try { return json(req, JSON.parse(m[0])); } catch { await refund(); return err(req, "ai_failed", 502); }
 }
 
 // ---------------- fotky ----------------
