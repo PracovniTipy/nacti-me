@@ -108,6 +108,22 @@ async function refresh(env, a) {
 }
 
 // ---------------- AI návrh ----------------
+// Najde v odpovědi první celý JSON objekt (i když model přidá text okolo nebo ```json bloky).
+function parseJson(t) {
+  t = String(t || "").replace(/```(?:json)?/gi, "");
+  for (let i = t.indexOf("{"); i >= 0; i = t.indexOf("{", i + 1)) {
+    let depth = 0, str = false, esc = false;
+    for (let j = i; j < t.length; j++) {
+      const c = t[j];
+      if (str) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') str = false; continue; }
+      if (c === '"') str = true; else if (c === "{") depth++; else if (c === "}" && --depth === 0) {
+        try { const o = JSON.parse(t.slice(i, j + 1)); if (o && typeof o === "object") return o; } catch {}
+        break;
+      }
+    }
+  }
+  return null;
+}
 const LAYOUTS = { card: ["monogram", "editorial", "ticket", "swiss", "aura", "split"], a6: ["editorial", "block", "frame", "aura"], sticker: ["badge", "ring"] };
 const HINTS = {
   monogram: "obří iniciály přes okraj, elegantní", editorial: "časopisecký styl, velký nadpis, tenká linka",
@@ -154,7 +170,7 @@ Odpověz POUZE JSON: {"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#r
   const r = await fetch(`${env.ANTHROPIC_API_BASE || "https://api.anthropic.com"}/v1/messages`, {
     method: "POST",
     headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: env.AI_MODEL || "claude-haiku-5-5", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: env.AI_MODEL || "claude-haiku-5-5", max_tokens: 900, messages: [{ role: "user", content: prompt }] }),
   });
   if (!r.ok) {
     const t = await r.text(); console.error(t);
@@ -163,8 +179,12 @@ Odpověz POUZE JSON: {"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#r
     return json(req, { error: "ai_failed", detail: why }, 502);
   }
   const out = await r.json();
-  const m = (out?.content || []).map((x) => x.text || "").join("").match(/\{[\s\S]*\}/);
-  try { return json(req, JSON.parse(m[0])); } catch { await refund(); return err(req, "ai_failed", 502); }
+  const raw = (out?.content || []).map((x) => x.text || "").join("");
+  const d = parseJson(raw);
+  if (d) return json(req, d);
+  console.error("AI bez JSON:", raw.slice(0, 500), out?.stop_reason);
+  await refund();
+  return json(req, { error: "ai_failed", detail: `bad_json ${out?.stop_reason || ""}: ${raw.slice(0, 160)}` }, 502);
 }
 
 // ---------------- fotky ----------------
