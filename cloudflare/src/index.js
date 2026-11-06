@@ -153,7 +153,11 @@ Odpověz POUZE JSON: {"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#r
     headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({ model: env.AI_MODEL || "claude-haiku-5-5", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
   });
-  if (!r.ok) { console.error(await r.text()); return err(req, "ai_failed", 502); }
+  if (!r.ok) {
+    const t = await r.text(); console.error(t);
+    let why = ""; try { const e = JSON.parse(t).error; why = `${r.status} ${e?.type || ""}: ${e?.message || ""}`.slice(0, 200); } catch { why = String(r.status); }
+    return json(req, { error: "ai_failed", detail: why }, 502);
+  }
   const out = await r.json();
   const m = (out?.content || []).map((x) => x.text || "").join("").match(/\{[\s\S]*\}/);
   try { return json(req, JSON.parse(m[0])); } catch { return err(req, "ai_failed", 502); }
