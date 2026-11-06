@@ -53,6 +53,7 @@ jobs:
           $W r2 bucket create nacti-fotky 2>/dev/null || true
           $W d1 execute nacti-eu --remote --file schema.sql -y
           $W d1 execute nacti-eu --remote --command "DELETE FROM usage WHERE day < date('now', '-2 days')" -y
+          $W d1 execute nacti-eu --remote --command "DELETE FROM usage WHERE kind = 'ai'" -y  # jednorázově: vynulovat testy
           $W deploy | tee deploy.log
           AK=$(printf '%s' "$ANTHROPIC_API_KEY" | grep -oE 'sk-ant-[A-Za-z0-9_-]{20,}' | head -1 || true)
           SK=$(printf '%s' "$STRIPE_SECRET_KEY" | grep -oE '(sk|rk)_(live|test)_[A-Za-z0-9]{20,}' | head -1 || true)
