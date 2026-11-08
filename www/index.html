@@ -69,7 +69,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .pill:hover { background: rgba(255,255,255,0.16); }
 
 /* Příběh */
-.story { position: relative; height: 560vh; }
+.story { position: relative; height: 400vh; }
 .stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; }
 /* Výkon: záře a zrno jsou jedna statická vrstva pod plátnem – rozmazání a prolnutí se vykreslí jednou, ne při každém snímku. */
 .bgfx { position: absolute; inset: 0; isolation: isolate; overflow: hidden; will-change: transform; pointer-events: none; }
@@ -88,12 +88,22 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .cap h1, .cap h2 { font-family: var(--serif); font-weight: 800; font-size: clamp(44px, 5.6vw, 92px); line-height: .94; letter-spacing: -0.045em; margin: 0; text-wrap: balance; }
 .cap h1 em, .cap h2 em { font-style: normal; font-weight: 250; letter-spacing: -0.04em; color: transparent; background: linear-gradient(100deg, var(--ink) 10%, var(--g2) 120%); -webkit-background-clip: text; background-clip: text; }
 .cap p { margin: 0; color: var(--muted); font-size: 17px; max-width: 34ch; }
+.go { justify-self: start; margin-top: 6px; display: inline-flex; align-items: center; gap: 10px; padding: 16px 26px; border-radius: 999px; text-decoration: none;
+  font-weight: 700; font-size: 17px; color: #fff; background: linear-gradient(100deg, var(--g1), var(--g2)); box-shadow: 0 18px 50px -14px var(--g2);
+  pointer-events: auto; transition: transform .15s, box-shadow .2s; }
+.go span { transition: transform .2s; }
+.go:hover { transform: translateY(-2px); box-shadow: 0 24px 60px -14px var(--g2); }
+.go:hover span { transform: translateX(4px); }
+.cap:not(.on) .go { pointer-events: none; }
 
 .dots { position: absolute; z-index: 3; right: max(22px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%); display: grid; gap: 14px; }
 .dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.22); transition: background .3s, transform .3s; }
 .dots span.on { background: var(--ink); transform: scale(1.5); }
-.hint { position: absolute; z-index: 3; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font-family: var(--mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); transition: opacity .4s; display: grid; justify-items: center; gap: 10px; }
-.hint i { width: 1px; height: 38px; background: linear-gradient(var(--muted), transparent); animation: drip 1.8s ease-in-out infinite; transform-origin: top; }
+.hint { position: absolute; z-index: 3; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font-family: var(--mono); font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink); transition: opacity .4s; display: grid; justify-items: center; gap: 8px;
+  border: 0; background: rgba(255,255,255,.08); padding: 12px 18px 10px; border-radius: 999px; cursor: pointer; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: nudge 2s ease-in-out infinite; }
+.hint:hover { background: rgba(255,255,255,.16); }
+@keyframes nudge { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 6px); } }
+.hint i { width: 1px; height: 22px; background: linear-gradient(var(--muted), transparent); animation: drip 1.8s ease-in-out infinite; transform-origin: top; }
 @keyframes drip { 0% { transform: scaleY(0); } 50% { transform: scaleY(1); } 100% { transform: scaleY(1); opacity: 0; } }
 
 /* Telefon */
@@ -186,6 +196,7 @@ footer a { color: var(--muted); }
         <span class="kick">01 — Cokoli</span>
         <h1>Váš QR kód.<br><em>Za pět vteřin.</em></h1>
         <p>Vložte odkaz, text nebo telefon a kód je hotový. Zdarma, bez registrace a funguje navždy.</p>
+        <a class="go" id="openApp3" href="app/">Vytvořit QR kód zdarma <span>→</span></a>
       </div>
       <div class="cap" data-i="1">
         <span class="kick">02 — Vizitka</span>
@@ -204,7 +215,7 @@ footer a { color: var(--muted); }
       </div>
     </div>
     <div class="dots" aria-hidden="true"><span class="on"></span><span></span><span></span><span></span></div>
-    <div class="hint" id="hint">Rolujte<i></i></div>
+    <button type="button" class="hint" id="hint" aria-label="Ukázat, jak to funguje">Jak to funguje ↓</button>
   </div>
 </section>
 
@@ -232,7 +243,7 @@ footer a { color: var(--muted); }
 
   // Odkaz na aplikaci: na nacti.me relativně, v náhledu na claude.ai na publikovanou aplikaci.
   const inPreview = !!window.claude || /claude|anthropic/.test(location.hostname) || location.protocol === 'about:';
-  if (inPreview) { ['openApp', 'openApp2'].forEach((id) => { $(id).href = 'https://claude.ai/artifact/WAk53SQ72QR9MZMfvb5keL'; $(id).target = '_blank'; $(id).rel = 'noopener'; }); }
+  if (inPreview) { ['openApp', 'openApp2', 'openApp3'].forEach((id) => { $(id).href = 'https://claude.ai/artifact/WAk53SQ72QR9MZMfvb5keL'; $(id).target = '_blank'; $(id).rel = 'noopener'; }); }
 
   // ---------- QR matice ----------
   if (window.qrcode && qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs['UTF-8']) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
@@ -323,15 +334,18 @@ footer a { color: var(--muted); }
     document.documentElement.style.setProperty('--g1', SCENES[i].g1); document.documentElement.style.setProperty('--g2', SCENES[i].g2);
   }
 
+  // Kód se složí sám hned po načtení (nikdo nemusí rolovat, aby něco viděl)
+  let intro = reduce ? 1 : 0, introStart = 0;
   function draw() {
     if (!W) return;
-    const p = prog;
-    const t1 = ease(seg(p, 0.02, 0.22));   // skládání kódu
-    const t2 = ease(seg(p, 0.25, 0.44));   // vizitka
+    // Rolování mapujeme až za fázi skládání: první posun hned mění scénu
+    const p = 0.21 + 0.79 * prog;
+    const t1 = ease(intro);                // skládání kódu
+    const t2 = easeOut(seg(p, 0.23, 0.42)); // vizitka: vyjede hned po prvním posunu
     const t3 = ease(seg(p, 0.48, 0.66));   // telefon
     const t4 = ease(seg(p, 0.72, 0.9));    // platba
     setScene(p < 0.24 ? 0 : p < 0.47 ? 1 : p < 0.71 ? 2 : 3);
-    const hOp = p > 0.03 ? '0' : '1'; if (hOp !== lastHint) { lastHint = hOp; hintEl.style.opacity = hOp; }
+    const hOp = prog > 0.02 ? '0' : '1'; if (hOp !== lastHint) { lastHint = hOp; hintEl.style.opacity = hOp; hintEl.style.pointerEvents = hOp === '1' ? 'auto' : 'none'; }
 
     const wide = W > 860;
     // Na telefonu se scéna vejde pod nejvyšší text, aby se nepřekrývaly
@@ -460,11 +474,12 @@ footer a { color: var(--muted); }
 
   // ---------- Smyčka ----------
   let raf = 0;
-  function loop() {
+  function loop(now) {
     const diff = target - prog;
-    prog = reduce ? target : prog + diff * 0.1;
+    prog = reduce ? target : prog + diff * 0.12;
+    if (intro < 1) { if (!introStart) introStart = now || performance.now(); intro = Math.min(1, ((now || performance.now()) - introStart) / 1500); }
     draw();
-    if (Math.abs(diff) > 0.0004 || Math.abs(tiltX - pointerY * 4) > 0.01 || Math.abs(tiltY + pointerX * 6) > 0.01) raf = requestAnimationFrame(loop);
+    if (intro < 1 || Math.abs(diff) > 0.0004 || Math.abs(tiltX - pointerY * 4) > 0.01 || Math.abs(tiltY + pointerX * 6) > 0.01) raf = requestAnimationFrame(loop);
     else { prog = target; draw(); raf = 0; }
   }
   const kick = () => { if (!raf) raf = requestAnimationFrame(loop); };
@@ -477,6 +492,9 @@ footer a { color: var(--muted); }
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); readScroll(); draw(); });
   addEventListener('load', () => { measure(); readScroll(); kick(); });
   resize(); readScroll(); prog = target; draw();
+  setTimeout(kick, 250);
+  // Klik na „Jak to funguje“ posune na další scénu
+  hintEl.addEventListener('click', () => scrollTo({ top: storyTop + storyTotal * 0.2, behavior: reduce ? 'auto' : 'smooth' }));
 })();
 </script>
 
