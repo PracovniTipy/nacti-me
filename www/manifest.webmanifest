@@ -1,15 +1,15 @@
 {
   "name": "Načti.me – QR kódy, QR platby a vizitky",
   "short_name": "Načti.me",
-  "description": "QR kódy na odkaz, Wi-Fi, kontakt i českou QR platbu. Vizitky, kartičky a samolepky k tisku.",
+  "description": "QR kódy na odkaz, Wi-Fi, kontakt, fotky i českou QR platbu. Vizitky, kartičky a samolepky k tisku, s Pro i návrh na míru od AI.",
   "lang": "cs",
   "id": "/app/",
   "start_url": "./app/",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f3f3f1",
-  "theme_color": "#111113",
+  "background_color": "#07060a",
+  "theme_color": "#07060a",
   "categories": [
     "productivity",
     "business",
@@ -42,8 +42,49 @@
   ],
   "shortcuts": [
     {
-      "name": "QR platba",
+      "name": "Vizitka",
       "url": "./app/"
+    },
+    {
+      "name": "Načti.me Pro",
+      "url": "./pro/"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/1-uvod.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Načti.me – QR kód za pět vteřin"
+    },
+    {
+      "src": "screenshots/2-vizitka.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Vizitka k tisku podle oboru"
+    },
+    {
+      "src": "screenshots/3-qr-platba.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Česká QR platba"
+    },
+    {
+      "src": "screenshots/4-pro.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Načti.me Pro – statistiky skenů"
+    },
+    {
+      "src": "screenshots/5-mobil.png",
+      "sizes": "540x1170",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Načti.me v telefonu"
     }
   ]
 }
