@@ -363,9 +363,9 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
           <div class="sec-h"><h3>Velikost</h3>
             <div class="az" role="group" aria-label="Všechen text"><button type="button" id="tAllMinus" aria-label="Zmenšit všechen text">A<sup>−</sup></button><button type="button" id="tAllPlus" aria-label="Zvětšit všechen text">A<sup>+</sup></button></div>
           </div>
-          <label class="sl" for="tName"><span>Jméno a nadpis</span><output id="tNameV">100 %</output><input type="range" id="tName" min="60" max="180" step="5" value="100"></label>
-          <label class="sl" for="tSize"><span>Údaje a čísla</span><output id="tSizeV">100 %</output><input type="range" id="tSize" min="70" max="180" step="5" value="100"></label>
-          <label class="sl" for="tQr"><span>QR kód</span><output id="tQrV">100 %</output><input type="range" id="tQr" min="70" max="150" step="5" value="100"></label>
+          <label class="sl" for="tName"><span>Jméno a nadpis</span><output id="tNameV">100 %</output><input type="range" id="tName" min="60" max="250" step="5" value="100"></label>
+          <label class="sl" for="tSize"><span>Údaje a čísla</span><output id="tSizeV">100 %</output><input type="range" id="tSize" min="70" max="250" step="5" value="100"></label>
+          <label class="sl" for="tQr"><span>QR kód</span><output id="tQrV">100 %</output><input type="range" id="tQr" min="70" max="220" step="5" value="100"></label>
         </div>
       </div>
       </details>
@@ -819,7 +819,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
       display: DISPLAY[d.display] ? d.display : 'Fraunces', text: TEXT[d.text] ? d.text : 'Geist', upper: !!d.upper,
       headline: typeof d.headline === 'string' ? d.headline.trim().replace(/\s+/g, ' ').slice(0, 40) : '',
       tagline: typeof d.tagline === 'string' ? d.tagline.trim().replace(/\s+/g, ' ').slice(0, 44) : '',
-      nameScale: Math.min(1.8, Math.max(0.6, +d.nameScale || 1)), textScale: Math.min(1.8, Math.max(0.7, +d.textScale || 1)), qrScale: Math.min(1.5, Math.max(0.7, +d.qrScale || 1)),
+      nameScale: Math.min(2.5, Math.max(0.6, +d.nameScale || 1)), textScale: Math.min(2.5, Math.max(0.7, +d.textScale || 1)), qrScale: Math.min(2.2, Math.max(0.7, +d.qrScale || 1)),
       art: typeof d.art === 'string' && /^<svg[\s>]/i.test(d.art) ? d.art : '', artOpacity: Math.min(1, Math.max(0.25, +d.artOpacity || 1)),
       motif: MOTIFS[d.motif] || d.motif === 'none' ? d.motif : '', motifOpacity: Math.min(1, Math.max(0.3, +d.motifOpacity || 1)),
       img: typeof d.img === 'string' && d.img.startsWith('data:image/') ? d.img : '', imgMode: d.imgMode === 'bg' ? 'bg' : 'logo',
@@ -1097,7 +1097,7 @@ Odpověz POUZE JSON objektem:
   $('tName').addEventListener('input', (e) => tweak({ nameScale: e.target.value / 100 }));
   $('tSize').addEventListener('input', (e) => tweak({ textScale: e.target.value / 100 }));
   $('tQr').addEventListener('input', (e) => tweak({ qrScale: e.target.value / 100 }));
-  const allText = (k) => { if (!design) return; tweak({ nameScale: Math.min(1.8, Math.max(0.6, Math.round((design.nameScale + k) * 20) / 20)), textScale: Math.min(1.8, Math.max(0.7, Math.round((design.textScale + k) * 20) / 20)) }); };
+  const allText = (k) => { if (!design) return; tweak({ nameScale: Math.min(2.5, Math.max(0.6, Math.round((design.nameScale + k) * 20) / 20)), textScale: Math.min(2.5, Math.max(0.7, Math.round((design.textScale + k) * 20) / 20)) }); };
   $('tAllPlus').addEventListener('click', () => allText(0.1));
   $('tAllMinus').addEventListener('click', () => allText(-0.1));
   $('tUpper').addEventListener('change', (e) => tweak({ upper: e.target.checked }));
