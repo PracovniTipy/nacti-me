@@ -187,8 +187,7 @@ body { background: var(--bg); font-size: 16px; position: relative; overflow-x: h
 body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
   background: radial-gradient(40vmax 40vmax at 20% 10%, rgba(139,61,255,.45), transparent 60%),
               radial-gradient(35vmax 35vmax at 90% 60%, rgba(255,61,139,.32), transparent 60%);
-  animation: drift 18s ease-in-out infinite alternate; }
-/* Výkon: přechody jsou už měkké, filter: blur na animované vrstvě přes celou obrazovku stál každý snímek a nutil přepočítávat všechny backdrop-filter. */
+  filter: blur(30px); animation: drift 18s ease-in-out infinite alternate; }
 @keyframes drift { to { transform: translate3d(-4%, 3%, 0) scale(1.08); } }
 .app { gap: 24px; padding-block: 18px 64px; }
 .mark { font-family: var(--sans); letter-spacing: 0; text-transform: none; align-items: center; }
@@ -719,6 +718,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
       headline: typeof d.headline === 'string' ? d.headline.trim().replace(/\s+/g, ' ').slice(0, 40) : '',
       tagline: typeof d.tagline === 'string' ? d.tagline.trim().replace(/\s+/g, ' ').slice(0, 44) : '',
       nameScale: Math.min(1.4, Math.max(0.6, +d.nameScale || 1)), textScale: Math.min(1.4, Math.max(0.7, +d.textScale || 1)),
+      art: typeof d.art === 'string' && /^<svg[\s>]/i.test(d.art) ? d.art : '', artOpacity: Math.min(1, Math.max(0.25, +d.artOpacity || 1)),
     };
     if (!d.inkLocked && ratio(o.ink, o.bg) < 4.5) o.ink = lum(o.bg) > 0.3 ? '#111113' : '#f6f5f1';
     return adaptDesign(o);
@@ -813,6 +813,33 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     return { n: i + 1, title: `${p[0]} · ${LAYOUT_NAMES[lay]}`, layout: lay, bg: p[1], ink: p[2], accent: p[3], accent2: p[4], display: f[0], text: f[1], upper: f[2] };
   });
 
+  // ---- Grafika od AI: SVG načtené jako obrázek (bez skriptů, jen kresba) ----
+  const ART = new Map();
+  function loadArt(svg) {
+    if (!svg) return Promise.resolve(null);
+    if (ART.has(svg)) return Promise.resolve(ART.get(svg));
+    return new Promise((res) => {
+      const im = new Image();
+      im.onload = () => { ART.set(svg, im); res(im); };
+      im.onerror = () => res(null);
+      im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  }
+  function forbiddenWords(brief) {
+    const out = [], re = /(?:bez\s+slov[ae]?|nepiš|nepis|nepoužívej\s+slovo|nepouzivej\s+slovo|ať\s+tam\s+není|at\s+tam\s+neni)\s+["„“']?([\p{L}-]{3,})/giu;
+    let m; while ((m = re.exec(brief || ''))) out.push(m[1].toLowerCase());
+    return out;
+  }
+  const hasWord = (t, ws) => ws.some((w) => String(t || '').toLowerCase().includes(w.slice(0, Math.max(3, w.length - 1))));
+  function splitAi(raw) {
+    const at = raw.search(/<svg[\s>]/i), head = at > 0 ? raw.slice(0, at) : raw;
+    const j = head.match(/\{[\s\S]*\}/); if (!j) throw new Error('bad');
+    const d = JSON.parse(j[0]);
+    const svg = at >= 0 ? (raw.slice(at).match(/<svg[\s\S]*<\/svg>/i) || [''])[0] : '';
+    d.art = /<script|foreignObject|\son[a-z]+=|href=["'](?!#)/i.test(svg) ? '' : svg;
+    return d;
+  }
+
   async function aiDesign(brief) {
     const L = FORMATS[format].layouts, avoid = used[format].slice(-3);
     const ctxInfo = mode === 'card'
@@ -828,10 +855,14 @@ ${avoid.length && !brief ? 'NEPOUŽÍVEJ rozvržení: ' + avoid.join(', ') + '.'
 Písma pro nadpis: ${Object.keys(DISPLAY).join(', ')}. Písma pro údaje: ${Object.keys(TEXT).join(', ')}.
 Barvy: když zákazník nic neurčí, zvol paletu jako od designového studia. Text (ink) musí být na pozadí (bg) dobře čitelný.
 ${mode === 'card' ? 'headline = jméno osoby beze změny. tagline = krátký slogan česky do 36 znaků podle oboru, nebo prázdný.' : 'headline = krátká, výstižná česká výzva do 28 znaků, co má člověk udělat (např. „Připojte se k Wi-Fi“). tagline = doplňující věta česky do 40 znaků, nebo prázdný.'}
-Odpověz POUZE JSON objektem:
-{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}
-Nevymýšlej žádné kontaktní ani platební údaje.`;
-    return sample.json(prompt, { modelTier: 'default', cache: false });
+${forbiddenWords(brief).length ? 'ZAKÁZANÁ SLOVA – nesmí být v žádném textu: ' + forbiddenWords(brief).join(', ') + '.' : ''}
+Když zákazník chce motiv, obrázek, vzor nebo náladu (rozbité sklo, vlny, hory, květiny, mramor…), NAKRESLI ho jako SVG pozadí: viewBox="0 0 ${FORMATS[format].W} ${FORMATS[format].H}", včetně podkladové barvy bg, jen vektorové tvary a přechody, žádný text ani obrázky, do 7 kB. Výrazné prvky dej k okrajům, v místě textu drž motiv jemný. Bez motivu můžeš SVG vynechat.
+Nevymýšlej žádné kontaktní ani platební údaje.
+Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
+{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"artOpacity":1,"headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}
+<svg …>…</svg>`;
+    const r = await sample(prompt, { modelTier: 'complex', cache: false });
+    return splitAi(r.text || '');
   }
 
   async function serverDesign(brief) {
@@ -853,23 +884,30 @@ Nevymýšlej žádné kontaktní ani platební údaje.`;
     const brief = $('brief').value.trim(), patch = parseBrief(brief);
     const modify = kind !== 'new' && !!design && !!brief;
     busy = true; $('aiBtn').disabled = true; $('againBtn').disabled = true; $('aiBtn').classList.add('busy');
-    $('aiLabel').textContent = modify ? 'Upravuji podle přání…' : hasAi() ? 'AI navrhuje na míru…' : 'Navrhuji…';
+    $('aiLabel').textContent = hasAi() ? (brief ? 'AI kreslí podle přání… (do 30 s)' : 'AI navrhuje na míru…') : (modify ? 'Upravuji podle přání…' : 'Navrhuji…');
     if (used[format].length >= FORMATS[format].layouts.length) used[format].length = 0;
     let d = null, note = '';
     if (hasAi()) {
       try {
         d = sample ? await aiDesign(brief) : await serverDesign(brief);
         note = (d && typeof d.why === 'string' && d.why.trim()) ? d.why.trim().slice(0, 160) : '';
-      } catch (e) { if (e && e.code === 'rate_limited' && !isPro()) note = 'Dnes jste vyčerpali 3 AI návrhy zdarma. S Načti.me Pro jsou bez omezení.'; d = null; }
+      } catch (e) {
+        note = e && e.code === 'rate_limited' && !isPro() ? 'Dnes jste vyčerpali 3 AI návrhy zdarma. S Načti.me Pro jsou bez omezení.' : 'AI teď neodpověděla, zkuste to prosím znovu. Zatím jsme upravili barvy a písmo podle přání.';
+        d = null;
+      }
     }
     if (!d) d = modify ? { ...design } : { ...PRESETS[presetIdx++ % PRESETS.length], layout: FORMATS[format].layouts.find((l) => !used[format].includes(l)) };
-    if (modify && !patch.layout && d.layout !== design.layout && !/styl|rozvržen|jiný|úplně nov/.test(brief.toLowerCase())) d.layout = design.layout;
+    if (modify && !d.art && !patch.layout && d.layout !== design.layout && !/styl|rozvržen|jiný|úplně nov/.test(brief.toLowerCase())) d.layout = design.layout;
     Object.assign(d, patch);                       // co zákazník napsal, platí vždy
     if (mode === 'card') d.headline = current.headline;
     if (!modify && design && !patch.nameScale && !d.nameScale) d.nameScale = design.nameScale;
     if (!modify && design && !patch.textScale && !d.textScale) d.textScale = design.textScale;
+    const ban = forbiddenWords(brief);
+    if (ban.length && hasWord(d.tagline, ban)) d.tagline = '';
+    if (ban.length && mode !== 'card' && hasWord(d.headline, ban)) d.headline = '';
     d = cleanDesign(d);
-    if (!modify && !patch.layout && used[format].slice(-1)[0] === d.layout) d.layout = FORMATS[format].layouts.find((l) => !used[format].includes(l)) || d.layout;
+    if (d.art) await loadArt(d.art);
+    if (!modify && !brief && !patch.layout && used[format].slice(-1)[0] === d.layout) d.layout = FORMATS[format].layouts.find((l) => !used[format].includes(l)) || d.layout;
     used[format].push(d.layout);
     design = d; syncTune();
     await renderPrint();
@@ -1049,6 +1087,9 @@ Nevymýšlej žádné kontaktní ani platební údaje.`;
     const labelW = (size) => { setLabel(size * 0.62 * TS); return Math.max(...details.map(([k]) => widthOf(x, k.toLocaleUpperCase('cs'), size * 0.12 * TS)), 0) + size * 0.7 * TS; };
 
     fill(d.bg); x.fillRect(0, 0, W, H);
+    // Grafika na míru od AI (rozbité sklo, vlny, ornamenty…) jako pozadí pod textem
+    const artImg = d.art && ART.get(d.art);
+    if (artImg && artImg.complete && artImg.naturalWidth) { x.save(); x.globalAlpha = d.artOpacity || 1; x.drawImage(artImg, 0, 0, W, H); x.restore(); }
 
     // ---------------- VIZITKA ----------------
     if (fmt === 'card') {

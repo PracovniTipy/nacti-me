@@ -135,6 +135,29 @@ const HINTS = {
 const DISPLAY = ["Fraunces", "Bodoni Moda", "Instrument Serif", "Unbounded", "Syne", "Bricolage Grotesque"];
 const TEXT = ["Geist", "Manrope", "DM Mono"];
 
+// Bezpečná SVG grafika od AI: jen kreslicí prvky, žádné skripty ani odkazy ven.
+function cleanSvg(svg) {
+  if (typeof svg !== "string") return "";
+  let t = svg.slice(0, 80000);
+  t = t.replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<\s*(script|foreignObject|iframe|object|embed|image|audio|video|a)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*(script|foreignObject|iframe|object|embed|image|audio|video)\b[^>]*\/?>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(xlink:)?href\s*=\s*("(?!#)[^"]*"|'(?!#)[^']*')/gi, "")
+    .replace(/url\(\s*['"]?(?!#)[^)]*\)/gi, "none")
+    .replace(/@import[^;]*;?/gi, "");
+  if (!/^<svg[\s>]/i.test(t.trim()) || !/<\/svg>\s*$/i.test(t.trim())) return "";
+  return t.trim();
+}
+// Slova, která zákazník zakázal („bez slova sklo“, „nepiš sklo“)
+function forbidden(brief) {
+  const out = [];
+  const re = /(?:bez\s+slov[ae]?|nepiš|nepis|nepoužívej\s+slovo|nepouzivej\s+slovo|ať\s+tam\s+není|at\s+tam\s+neni)\s+["„“']?([\p{L}-]{3,})/giu;
+  let m; while ((m = re.exec(brief))) out.push(m[1].toLowerCase());
+  return out;
+}
+const hasWord = (text, words) => words.some((w) => String(text || "").toLowerCase().includes(w.slice(0, Math.max(3, w.length - 1))));
+
 async function design(req, env) {
   if (!env.ANTHROPIC_API_KEY) return err(req, "not_configured", 503);
   let body; try { body = await req.json(); } catch { return err(req, "bad_json", 400); }
@@ -145,7 +168,7 @@ async function design(req, env) {
   const refund = () => counted && env.DB.prepare("UPDATE usage SET n = n - 1 WHERE kind = 'ai' AND ip = ?1 AND day = ?2 AND n > 0").bind(ip(req), today()).run();
 
   const format = LAYOUTS[body?.format] ? body.format : "card";
-  const brief = clip(body?.brief, 400);
+  const brief = clip(body?.brief, 600);
   const info = {
     jmeno: clip(body?.info?.name, 80), pozice: clip(body?.info?.title, 80), firma: clip(body?.info?.org, 80),
     web: clip(body?.info?.web, 120), druh: clip(body?.info?.kind, 30), obsah: clip(body?.info?.summary, 120),
@@ -154,23 +177,36 @@ async function design(req, env) {
   const current = c ? JSON.stringify({ layout: clip(c.layout, 20), bg: clip(c.bg, 7), ink: clip(c.ink, 7), accent: clip(c.accent, 7), display: clip(c.display, 30), text: clip(c.text, 30), upper: !!c.upper, nameScale: +c.nameScale || 1, textScale: +c.textScale || 1 }) : "";
   const avoid = Array.isArray(body?.avoid) ? body.avoid.filter((l) => LAYOUTS[format].includes(l)).slice(0, 5) : [];
   const names = { card: "vizitka 85×55 mm", a6: "kartička A6 105×148 mm (stojánek, leták)", sticker: "samolepka 50×50 mm" };
-  const prompt = `Jsi art director předního designového studia. Navrhni tiskovinu na míru: ${names[format]} s QR kódem.
+  const VB = { card: "0 0 850 550", a6: "0 0 1050 1480", sticker: "0 0 500 500" }[format];
+  const zone = {
+    card: "Text (jméno, údaje) je vlevo zhruba v 60 % šířky, QR kód v bílém čtverci vpravo. Výrazné prvky motivu dej hlavně k okrajům a doprava; v textové zóně drž motiv jemný (nízký kontrast vůči bg), aby text zůstal perfektně čitelný.",
+    a6: "Nadpis je nahoře, QR kód uprostřed až dole v bílém čtverci, text pod ním. Výrazné prvky motivu dej k okrajům a do rohů.",
+    sticker: "QR kód je uprostřed v bílém poli. Motiv patří k okrajům a do rámu.",
+  }[format];
+  const ban = forbidden(brief);
+  const prompt = `Jsi špičkový grafický designér a ilustrátor. Navrhni na míru tiskovinu: ${names[format]} s QR kódem.
 Údaje: ${JSON.stringify(info)}
-Přání zákazníka (ZÁVAZNÉ, má přednost před vším ostatním): ${brief || "(nic neuvedl, odvoď styl z oboru a údajů)"}
-Když zákazník uvede barvu, použij ji přesně (pozadí → bg, text → ink, detaily → accent). Když chce větší nebo menší jméno či údaje, nastav nameScale (0.6–1.4) nebo textScale (0.7–1.4). Styl, písmo i velká písmena dodrž.
-${current ? "Současný návrh: " + current + " – pokud zákazník chce jen úpravu, uprav tento návrh a zbytek ponech." : ""}
-Rozvržení: ${LAYOUTS[format].map((l) => `${l} (${HINTS[l]})`).join("; ")}.
-${avoid.length && !brief ? "Nepoužij rozvržení: " + avoid.join(", ") + "." : ""}
-Písma pro nadpis: ${DISPLAY.join(", ")}. Písma pro údaje: ${TEXT.join(", ")}.
-Když zákazník barvy neurčí, zvol paletu jako zkušený designér. Text (ink) musí být na pozadí (bg) dobře čitelný.
-${format === "card" ? "headline = jméno osoby beze změny. tagline = krátký výstižný slogan česky do 36 znaků, nebo prázdný." : "headline = krátká česká výzva do 28 znaků. tagline = doplňující věta česky do 40 znaků, nebo prázdný."}
-Nevymýšlej žádné kontaktní ani platební údaje.
-Odpověz POUZE JSON: {"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}`;
+PŘÁNÍ ZÁKAZNÍKA (ZÁVAZNÉ, splň ho doslova a celé): ${brief || "(nic neuvedl, odvoď styl z oboru a údajů)"}
+${ban.length ? `ZAKÁZANÁ SLOVA – nesmí se objevit nikde v textech (headline, tagline): ${ban.join(", ")}.` : ""}
+Pravidla:
+- Barvy z přání použij přesně (pozadí → bg, text → ink, detaily → accent). Velikost jména/údajů: nameScale 0.6–1.4, textScale 0.7–1.4. Styl, písmo a velká písmena dodrž.
+- Když zákazník chce motiv, obrázek, vzor nebo náladu (např. rozbité sklo, vlny, hory, květiny, mramor, neon), NAKRESLI ho jako SVG grafiku pozadí. Když motiv nechce, nakresli jemný abstraktní prvek, který sedí k oboru, nebo SVG vynech.
+- SVG: viewBox="${VB}", celé pozadí včetně podkladové barvy bg, jen vektorové tvary (path, polygon, line, circle, rect, linearGradient, radialGradient, filter s feTurbulence/feGaussianBlur). Žádný text, žádné obrázky, žádné externí odkazy. Do 7 kB.
+- ${zone}
+${current ? "- Současný návrh: " + current + ". Pokud zákazník chce jen úpravu, uprav tento návrh a zbytek ponech." : ""}
+- Rozvržení: ${LAYOUTS[format].map((l) => `${l} (${HINTS[l]})`).join("; ")}. ${format === "card" ? "S výrazným motivem nejlépe sedí editorial nebo swiss." : ""}
+${avoid.length && !brief ? "- Nepoužij rozvržení: " + avoid.join(", ") + "." : ""}
+- Písma pro nadpis: ${DISPLAY.join(", ")}. Písma pro údaje: ${TEXT.join(", ")}.
+- ${format === "card" ? "headline = jméno osoby beze změny. tagline = krátký slogan česky do 36 znaků, nebo prázdný (když si nejsi jistý, nech prázdný)." : "headline = krátká česká výzva do 28 znaků. tagline = doplňující věta česky do 40 znaků, nebo prázdný."}
+- Nevymýšlej žádné kontaktní ani platební údaje.
+Odpověz PŘESNĚ v tomto tvaru: nejdřív JSON na jednom řádku, pak SVG.
+{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"artOpacity":1,"headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}
+<svg …>…</svg>`;
 
   const r = await fetch(`${env.ANTHROPIC_API_BASE || "https://api.anthropic.com"}/v1/messages`, {
     method: "POST",
     headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: env.AI_MODEL || "claude-haiku-5-5", max_tokens: 900, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: env.AI_MODEL || "claude-sonnet-5-5", max_tokens: 6000, messages: [{ role: "user", content: prompt }] }),
   });
   if (!r.ok) {
     const t = await r.text(); console.error(t);
@@ -180,11 +216,17 @@ Odpověz POUZE JSON: {"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#r
   }
   const out = await r.json();
   const raw = (out?.content || []).map((x) => x.text || "").join("");
-  const d = parseJson(raw);
-  if (d) return json(req, d);
-  console.error("AI bez JSON:", raw.slice(0, 500), out?.stop_reason);
-  await refund();
-  return json(req, { error: "ai_failed", detail: `bad_json ${out?.stop_reason || ""}: ${raw.slice(0, 160)}` }, 502);
+  const svgAt = raw.search(/<svg[\s>]/i);
+  const d = parseJson(svgAt > 0 ? raw.slice(0, svgAt) : raw);
+  if (!d) {
+    console.error("AI bez JSON:", raw.slice(0, 500), out?.stop_reason);
+    await refund();
+    return json(req, { error: "ai_failed", detail: `bad_json ${out?.stop_reason || ""}: ${raw.slice(0, 160)}` }, 502);
+  }
+  const svg = svgAt >= 0 ? (raw.slice(svgAt).match(/<svg[\s\S]*<\/svg>/i) || [""])[0] : "";
+  d.art = cleanSvg(svg);
+  if (ban.length) { if (hasWord(d.tagline, ban)) d.tagline = ""; if (format !== "card" && hasWord(d.headline, ban)) d.headline = ""; }
+  return json(req, d);
 }
 
 // ---------------- fotky ----------------
