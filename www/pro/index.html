@@ -489,8 +489,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const n = data.codes.length;
     $('codesCount').textContent = n ? `${n} ${n === 1 ? 'kód' : n < 5 ? 'kódy' : 'kódů'}` : '';
     if (!n) {
-      $('codes').innerHTML = '<div class="empty"><b>Zatím tu žádný kód není</b><span>Vytvořte první kód, který půjde kdykoli změnit i po vytištění.</span><button class="btn" type="button" id="firstCode">Vytvořit první kód</button></div>';
-      $('firstCode').addEventListener('click', () => openDrawer(null));
+      $('codes').innerHTML = '<div class="empty"><b>Zatím tu žádný kód není</b><span>Vytvořte první QR kód nebo vizitku v aplikaci.</span><a class="btn" id="firstCode" href="' + (live ? '../app/' : 'https://claude.ai/artifact/WAk53SQ72QR9MZMfvb5keL') + '">Vytvořit první kód</a></div>';
+      $('firstCode').addEventListener('click', () => setProCache(true, Date.now() + 3 * 864e5));
       return;
     }
     const rows = data.codes.map((c, i) => ({ c, s: data.perCode[i].slice(DAYS - range).reduce((a, b) => a + b, 0), arr: data.perCode[i].slice(DAYS - Math.min(range, 30)) })).sort((a, b) => b.s - a.s);
