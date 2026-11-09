@@ -255,7 +255,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 /* ===== Upravit ručně: oddíly a posuvníky ===== */
 .tune { gap: 0; padding: 6px 18px; }
 .sec { display: grid; gap: 14px; padding: 18px 0; border-top: 1px solid var(--line); }
-.tune > .sec:first-of-type { border-top: 0; }
+.tune > .sec:first-of-type, .tune > label + .sec { border-top: 0; }
 .sec-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .sec h3 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-family: var(--mono); }
 .sl { display: grid !important; grid-template-columns: 1fr auto; align-items: center; gap: 8px 12px !important; font-size: 14px !important; color: var(--fg) !important; }
@@ -343,15 +343,6 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
         <label for="tHead" id="tHeadWrap">Nadpis<input type="text" id="tHead" maxlength="40"></label>
 
         <div class="sec">
-          <div class="sec-h"><h3>Velikost</h3>
-            <div class="az" role="group" aria-label="Všechen text"><button type="button" id="tAllMinus" aria-label="Zmenšit všechen text">A<sup>−</sup></button><button type="button" id="tAllPlus" aria-label="Zvětšit všechen text">A<sup>+</sup></button></div>
-          </div>
-          <label class="sl" for="tName"><span>Jméno a nadpis</span><output id="tNameV">100 %</output><input type="range" id="tName" min="60" max="180" step="5" value="100"></label>
-          <label class="sl" for="tSize"><span>Údaje a čísla</span><output id="tSizeV">100 %</output><input type="range" id="tSize" min="70" max="180" step="5" value="100"></label>
-          <label class="sl" for="tQr"><span>QR kód</span><output id="tQrV">100 %</output><input type="range" id="tQr" min="70" max="150" step="5" value="100"></label>
-        </div>
-
-        <div class="sec">
           <div class="sec-h"><h3>Styl</h3></div>
           <div class="chips" id="tLayout" role="group" aria-label="Styl" hidden></div>
           <div class="gallery" id="gallery" role="group" aria-label="100 hotových návrhů" hidden></div>
@@ -372,6 +363,15 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
             <label class="imgbtn" for="tImg"><input type="file" id="tImg" accept="image/*" hidden><span id="tImgLabel">Nahrát logo nebo obrázek</span></label>
             <button type="button" class="imgdel" id="tImgDel" hidden>Odebrat</button>
           </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-h"><h3>Velikost</h3>
+            <div class="az" role="group" aria-label="Všechen text"><button type="button" id="tAllMinus" aria-label="Zmenšit všechen text">A<sup>−</sup></button><button type="button" id="tAllPlus" aria-label="Zvětšit všechen text">A<sup>+</sup></button></div>
+          </div>
+          <label class="sl" for="tName"><span>Jméno a nadpis</span><output id="tNameV">100 %</output><input type="range" id="tName" min="60" max="180" step="5" value="100"></label>
+          <label class="sl" for="tSize"><span>Údaje a čísla</span><output id="tSizeV">100 %</output><input type="range" id="tSize" min="70" max="180" step="5" value="100"></label>
+          <label class="sl" for="tQr"><span>QR kód</span><output id="tQrV">100 %</output><input type="range" id="tQr" min="70" max="150" step="5" value="100"></label>
         </div>
       </div>
       </details>
