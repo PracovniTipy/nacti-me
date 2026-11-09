@@ -238,9 +238,14 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 .stage { display: grid; gap: 14px; }
 #qrView { display: grid; gap: 14px; }
 .print { border-top: 0; padding-top: 0; }
-.upsell { text-align: center; font-size: 14px; color: var(--muted); text-decoration: none; padding: 4px; }
-.upsell b { color: var(--fg); }
-.upsell:hover { color: var(--fg); }
+.probadge { font: 700 10px/1 var(--mono); font-style: normal; letter-spacing: .12em; padding: 4px 7px; border-radius: 6px; background: rgba(255,255,255,.22); margin-left: 4px; }
+.procta { display: grid; gap: 6px; padding: 18px 20px; border-radius: 20px; text-decoration: none; color: var(--fg);
+  background: linear-gradient(120deg, rgba(139,61,255,.22), rgba(255,61,139,.18)); border: 1px solid rgba(255,255,255,.12); transition: transform .15s, border-color .2s; }
+.procta:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.3); }
+.procta .kick { font: 600 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #ff9cc8; }
+.procta b { font-size: 19px; letter-spacing: -.02em; }
+.procta span:not(.kick) { font-size: 14px; color: var(--muted); }
+.procta i { font-style: normal; font-weight: 700; font-size: 14px; margin-top: 4px; }
 .more { border-radius: 18px; }
 .more > summary { cursor: pointer; list-style: none; text-align: center; padding: 12px; border-radius: 14px; border: 1px solid var(--line); font-weight: 600; font-size: 14px; color: var(--muted); }
 .more > summary::-webkit-details-marker { display: none; }
@@ -297,9 +302,14 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     <textarea id="brief" class="brief" rows="2" maxlength="300" aria-label="Vaše představa" placeholder="Obor a představa, třeba: cukrářka, růžová, hravé"></textarea>
     <button type="button" class="ai" id="aiBtn" disabled>
       <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0l1.6 4.8L14.4 6.4 9.6 8 8 12.8 6.4 8 1.6 6.4 6.4 4.8zM13 10l.7 2.3L16 13l-2.3.7L13 16l-.7-2.3L10 13l2.3-.7z"/></svg>
-      <span id="aiLabel">Navrhnout</span>
+      <span id="aiLabel">Navrhnout</span><em class="probadge">PRO</em>
     </button>
-    <a class="upsell" id="upsell" href="https://nacti.me/pro/" hidden>✦ Vizitka přesně na míru s vlastní kresbou od AI je v <b>Načti.me Pro</b> →</a>
+    <a class="procta" id="upsell" href="https://nacti.me/pro/" hidden>
+      <span class="kick">✦ Načti.me Pro</span>
+      <b>Návrh přesně na míru od AI</b>
+      <span>Napíšete obor a představu a AI vám nakreslí vizitku s vlastní grafikou. 99 Kč měsíčně.</span>
+      <i>Vyzkoušet Pro →</i>
+    </a>
   </section>
 
   <section class="stage" aria-live="polite">
@@ -766,7 +776,9 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     document.querySelectorAll('[data-o]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.o === output)));
     const isQr = output === 'qr';
     $('qrView').hidden = !isQr; $('printBox').hidden = isQr; $('out').hidden = isQr || !design;
-    $('upsell').hidden = isQr || premium();
+    const pro = premium();
+    $('upsell').hidden = isQr || pro;
+    $('brief').hidden = !pro; $('aiBtn').hidden = !pro;
     $('brief').placeholder = output === 'card' ? 'Obor a představa, třeba: cukrářka, růžová, hravé' : 'Představa, třeba: kavárna, zelená, jemné';
   }
   document.querySelectorAll('[data-o]').forEach((b) => b.addEventListener('click', () => {
@@ -973,7 +985,7 @@ Odpověz POUZE JSON objektem:
 
   async function designPrint(kind) {
     if (busy || !current) return;
-    const brief = $('brief').value.trim(), patch = parseBrief(brief);
+    const brief = premium() ? $('brief').value.trim() : '', patch = parseBrief(brief);
     const modify = kind === 'ai' && !!design && !!brief;
     const useAi = kind === 'ai' && premium();
     busy = true; $('aiBtn').disabled = true; $('againBtn').disabled = true; $('aiBtn').classList.add('busy');
@@ -1008,7 +1020,7 @@ Odpověz POUZE JSON objektem:
     design = d; syncTune();
     await renderPrint();
     const done = Object.keys(patch).filter((k) => k !== 'inkLocked').length;
-    $('pNote').textContent = `${note || (done ? 'Upraveno podle vašeho přání.' : brief ? 'Návrh podle vašeho přání.' : 'Návrh na míru.')} Vše doladíte níže. Tisková kvalita ${format === 'a6' ? 300 : 600} DPI.`;
+    $('pNote').textContent = `${note || (done ? 'Upraveno podle vašeho přání.' : brief ? 'Návrh podle vašeho přání.' : '')} Vše doladíte v Upravit ručně. Tisková kvalita ${format === 'a6' ? 300 : 600} DPI.`;
     busy = false; $('aiBtn').disabled = !current; $('againBtn').disabled = false; $('aiBtn').classList.remove('busy');
     resetAiLabel();
     if (/Pro\.|neodpověděla/.test(note)) { $('pNote').classList.add('warn'); $('pNote').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); } else $('pNote').classList.remove('warn');
@@ -1016,7 +1028,7 @@ Odpověz POUZE JSON objektem:
   $('aiBtn').addEventListener('click', () => designPrint('ai'));
   renderOutputs();
   $('againBtn').addEventListener('click', () => designPrint('new'));
-  $('brief').addEventListener('input', () => { if (design) $('aiLabel').textContent = $('brief').value.trim() ? 'Upravit podle přání' : 'Navrhnout znovu s AI'; });
+
 
   // ---- 100 hotových návrhů hned pod styly ----
   let galHead = null, galIO = null;
