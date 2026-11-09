@@ -100,6 +100,20 @@ async function priceId(env) {
   const price = await stripe(env, "prices", { product: product.id, currency: "czk", unit_amount: PRICE_CZK * 100, recurring: { interval: "month" }, lookup_key: PRICE_KEY });
   return price.id;
 }
+// Zákaznický portál Stripe (zrušení předplatného, změna karty, faktury) – založí se sám, když chybí
+async function ensurePortal(env, force) {
+  if (!force) { const l = await stripe(env, "billing_portal/configurations", { is_default: "true", limit: 1 }, "GET"); if (l.data?.length) return; }
+  await stripe(env, "billing_portal/configurations", {
+            business_profile: { headline: "Načti.me Pro – správa předplatného" },
+            features: {
+              subscription_cancel: { enabled: "true", mode: "at_period_end" },
+              payment_method_update: { enabled: "true" },
+              invoice_history: { enabled: "true" },
+              customer_update: { enabled: "true", allowed_updates: { 0: "email", 1: "address" } },
+            },
+            default_return_url: `${SITE}/pro/`,
+          });
+}
 async function refresh(env, a) {
   if (!a?.stripe_customer) return a;
   const subs = await stripe(env, "subscriptions", { customer: a.stripe_customer, status: "all", limit: 1 }, "GET");
@@ -395,6 +409,7 @@ export default {
           const pc = await stripe(env, "promotion_codes", { code: pb.promo, active: "true", limit: 1 }, "GET");
           if (pc.data?.[0]) { delete params.allow_promotion_codes; params["discounts[0][promotion_code]"] = pc.data[0].id; }
         }
+        ctx.waitUntil(ensurePortal(env).catch((e) => console.error("portal", e.message)));
         const s = await stripe(env, "checkout/sessions", params);
         return json(req, { url: s.url });
       }
@@ -479,7 +494,15 @@ export default {
       }
       if (p === "/pro/portal" && M === "POST") {
         if (!a.stripe_customer) return err(req, "no_customer", 400);
-        const s = await stripe(env, "billing_portal/sessions", { customer: a.stripe_customer, return_url: `${SITE}/pro/` });
+        const open = () => stripe(env, "billing_portal/sessions", { customer: a.stripe_customer, return_url: `${SITE}/pro/` });
+        let s;
+        try { s = await open(); }
+        catch (e) {
+          // Zákaznický portál ještě není ve Stripe nastavený: založíme ho sami (zrušení, změna karty, faktury)
+          if (!/configuration/i.test(e.message || "")) throw e;
+          await ensurePortal(env, true);
+          s = await open();
+        }
         return json(req, { url: s.url });
       }
       if (p === "/pro/device" && M === "POST") {
