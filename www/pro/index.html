@@ -5,6 +5,7 @@
 <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests; object-src 'none'; base-uri 'self'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <script>if(location.protocol==='http:'&&!/^(localhost|127\.|\[::1\])/.test(location.hostname))location.replace('https://'+location.host+location.pathname+location.search+location.hash)</script>
+<script src="../bw.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#08070b">
@@ -641,6 +642,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       if (e.status === 401) { tok.set(null); setProCache(false, 0); show('pay'); return; }
       st = { pro: false, error: e.code };
     }
+    if (window.BW) BW.attach(API); // doporučení od partnera BrosWars připsat k účtu
     $('payWho').textContent = st.email || 'Načti.me Pro';
     setProCache(!!st.pro, st.pro ? Date.now() + 3 * 864e5 : 0);
     if (!st.pro) { show('pay'); $('logout1').hidden = false; if (st.error === 'not_configured') $('payMsg').textContent = 'Platby se právě spouštějí. Zkuste to prosím za chvíli.'; return; }
@@ -747,7 +749,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   async function startLive() {
     $('payBtn').addEventListener('click', async () => {
       $('payBtn').disabled = true; $('payMsg').className = 'gmsg'; $('payMsg').textContent = 'Otevírám bezpečnou platbu…';
-      try { const r = await api('/pro/checkout', 'POST', promoDiscount ? { promo: promoDiscount } : {}); location.href = r.url; }
+      try { const bw = window.BW && BW.click(), body = {}; if (promoDiscount) body.promo = promoDiscount; if (bw) body.click_id = bw; const r = await api('/pro/checkout', 'POST', body); location.href = r.url; }
       catch (e) { $('payBtn').disabled = false; $('payMsg').className = 'gmsg err'; $('payMsg').textContent = e.code === 'not_configured' ? 'Platby se právě spouštějí. Zkuste to prosím za chvíli.' : 'Platbu se nepodařilo otevřít. Zkuste to znovu.'; }
     });
     $('logout1').addEventListener('click', logout);

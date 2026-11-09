@@ -78,13 +78,15 @@ function form(obj, prefix = "") {
   }
   return out;
 }
-async function stripe(env, path, params, method) {
+async function stripe(env, path, params, method, version) {
   if (!env.STRIPE_SECRET_KEY) throw new Error("not_configured");
   method = method || (params ? "POST" : "GET");
   const qs = method === "GET" && params ? "?" + form(params).join("&") : "";
+  const headers = { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, "Content-Type": "application/x-www-form-urlencoded" };
+  if (version) headers["Stripe-Version"] = version;
   const r = await fetch(`${env.STRIPE_API_BASE || "https://api.stripe.com"}/v1/${path}${qs}`, {
     method,
-    headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, "Content-Type": "application/x-www-form-urlencoded" },
+    headers,
     body: method === "POST" && params ? form(params).join("&") : undefined,
   });
   const j = await r.json();
@@ -106,6 +108,86 @@ async function refresh(env, a) {
   const upd = { sub_status: sub?.status ?? null, period_end: end ? end * 1000 : null };
   await env.DB.prepare("UPDATE accounts SET sub_status = ?1, period_end = ?2 WHERE id = ?3").bind(upd.sub_status, upd.period_end, a.id).run();
   return { ...a, ...upd };
+}
+
+// ---------------- BrosWars Partner (doporučení od tvůrců) ----------------
+// Kontrakt: broswars-studio/partneri/KONTRAKT.md. Odkaz tvůrce přivede zákazníka na nacti.me/?bw=<clickId>,
+// web ho uloží a předá při placení (/pro/checkout) nebo připíše k účtu (/aff/attach).
+// Hub (Supabase) si každou hodinu stáhne zaplacené platby z GET /aff/conversions?since=ISO.
+// Přiřazení platby: poslední kliknutí připsané k účtu nejpozději v čase platby, jinak bw_click z metadat předplatného.
+// Okno 365 dní od kliknutí ověřuje hub podle času kliknutí, který zná jen on.
+const BW_ID = /^bw_[a-z0-9]{20}$/;
+const AFF_STRIPE_VERSION = "2024-06-20"; // pevná verze API = stálý tvar faktur (charge, subscription_details, lines.price)
+const AFF_MAX_PAGES = 10;                // max. 1000 faktur na jeden dotaz
+const AFF_CACHE_MS = 10 * 60e3;
+let affCache = null, affProductCache = null;
+
+async function affAttach(env, accountId, clickId, at) {
+  if (!accountId || !BW_ID.test(clickId || "")) return false;
+  await env.DB.prepare("INSERT OR IGNORE INTO aff_clicks (account_id, click_id, attached_at) VALUES (?1, ?2, ?3)").bind(accountId, clickId, at || now()).run();
+  return true;
+}
+// Produkt Načti.me Pro (jen dohledání podle lookup_key, nic nezakládá)
+async function affProduct(env) {
+  if (affProductCache && now() - affProductCache.at < 60 * 60e3) return affProductCache.id;
+  const found = await stripe(env, "prices", { "lookup_keys[]": PRICE_KEY, limit: 1 }, "GET", AFF_STRIPE_VERSION);
+  const p = found.data?.[0]?.product;
+  const id = typeof p === "string" ? p : p?.id || null;
+  affProductCache = { id, at: now() };
+  return id;
+}
+// Částka pro provizi v haléřích: zaplaceno − vráceno/dobropisy − daň připočtená navíc. 0 = nezapočítat.
+function affAmount(inv) {
+  const ch = inv.charge && typeof inv.charge === "object" ? inv.charge : null;
+  if (ch && (ch.refunded || ch.disputed)) return 0;
+  const back = Math.max(ch?.amount_refunded || 0, inv.post_payment_credit_notes_amount || 0);
+  const tax = (inv.total_tax_amounts || []).filter((t) => !t.inclusive).reduce((a, t) => a + (t.amount || 0), 0);
+  return Math.max(0, (inv.amount_paid || 0) - back - tax);
+}
+async function affCollect(env, from) {
+  const product = await affProduct(env);
+  if (!product) return [];
+  const out = [], accounts = new Map();
+  let after = null;
+  for (let page = 0; page < AFF_MAX_PAGES; page++) {
+    // fakturu lze zaplatit i později než vznikla (opakované stržení platby), proto hledáme 45 dní zpět
+    const q = { status: "paid", limit: 100, created: { gte: Math.floor((from - 45 * DAY) / 1000) }, "expand[]": "data.charge" };
+    if (after) q.starting_after = after;
+    const list = await stripe(env, "invoices", q, "GET", AFF_STRIPE_VERSION);
+    for (const inv of list.data || []) {
+      const paidAt = (inv.status_transitions?.paid_at || 0) * 1000;
+      if (!paidAt || paidAt < from) continue;
+      if (!inv.livemode && env.AFF_INCLUDE_TEST !== "1") continue;      // jen ostré platby
+      if (inv.paid_out_of_band) continue;                                 // ručně označené, žádné peníze přes Stripe
+      if (String(inv.currency).toLowerCase() !== "czk") continue;
+      if (!(inv.lines?.data || []).some((l) => (l.price?.product || l.plan?.product) === product)) continue;
+      const cents = affAmount(inv);
+      if (cents <= 0) continue;                                           // 100% sleva, vráceno, sporná platba
+      let click = null;
+      if (inv.customer) {
+        if (!accounts.has(inv.customer)) accounts.set(inv.customer, (await env.DB.prepare("SELECT id FROM accounts WHERE stripe_customer = ?1").bind(inv.customer).first())?.id || null);
+        const acc = accounts.get(inv.customer);
+        if (acc) click = (await env.DB.prepare("SELECT click_id FROM aff_clicks WHERE account_id = ?1 AND attached_at <= ?2 ORDER BY attached_at DESC LIMIT 1").bind(acc, paidAt).first())?.click_id || null;
+      }
+      const meta = inv.subscription_details?.metadata?.bw_click;
+      if (!click && BW_ID.test(meta || "")) click = meta;
+      if (!click) continue;
+      out.push({ external_id: inv.id, click_id: click, amount: cents / 100, currency: "CZK", paid_at: new Date(paidAt).toISOString(), description: "Načti.me Pro" });
+    }
+    if (!list.has_more || !list.data?.length) break;
+    after = list.data[list.data.length - 1].id;
+  }
+  return out.sort((a, b) => a.paid_at.localeCompare(b.paid_at));
+}
+async function affConversions(req, env, url) {
+  const raw = url.searchParams.get("since");
+  let since = raw ? Date.parse(raw) : now() - 30 * DAY;
+  if (!Number.isFinite(since)) return err(req, "bad_since", 400);
+  since = Math.max(since, now() - 400 * DAY);
+  if (!(await hit(env, "aff", ip(req), 300))) return err(req, "rate_limited", 429);
+  const from = Math.floor(since / 36e5) * 36e5; // mezipaměť po hodinách, přesný filtr až níže
+  if (!affCache || affCache.from !== from || now() - affCache.at > AFF_CACHE_MS) affCache = { from, at: now(), rows: await affCollect(env, from) };
+  return json(req, { conversions: affCache.rows.filter((c) => Date.parse(c.paid_at) >= since) });
 }
 
 // ---------------- AI návrh ----------------
@@ -289,6 +371,7 @@ export default {
       if ((m = p.match(/^\/photo\/([^/]+)$/)) && M === "PUT") return putPhoto(req, env, m[1]);
       if ((m = p.match(/^\/f\/([^/]+)$/)) && M === "GET") return getPhoto(req, env, m[1]);
       if ((m = p.match(/^\/q\/([^/]+)$/)) && M === "GET") return resolve(req, env, ctx, m[1]);
+      if (p === "/aff/conversions" && M === "GET") return affConversions(req, env, url);
 
       // ---- Pro ----
       if (p === "/pro/checkout" && M === "POST") {
@@ -301,6 +384,13 @@ export default {
         };
         if (a?.stripe_customer) params.customer = a.stripe_customer;
         if (a) params.client_reference_id = a.id;
+        // doporučení od tvůrce (BrosWars Partner): k účtu a do metadat platby i předplatného
+        const bw = BW_ID.test(pb?.click_id || "") ? pb.click_id : null;
+        if (bw) {
+          params.metadata = { bw_click: bw };
+          params.subscription_data = { metadata: { bw_click: bw } };
+          if (a) await affAttach(env, a.id, bw);
+        }
         if (/^[A-Za-z0-9_-]{2,40}$/.test(pb?.promo || "")) {
           const pc = await stripe(env, "promotion_codes", { code: pb.promo, active: "true", limit: 1 }, "GET");
           if (pc.data?.[0]) { delete params.allow_promotion_codes; params["discounts[0][promotion_code]"] = pc.data[0].id; }
@@ -326,6 +416,7 @@ export default {
           a.stripe_customer = s.customer;
         }
         await env.DB.prepare("INSERT INTO claims (session_id, account_id, at) VALUES (?1, ?2, ?3)").bind(session_id, a.id, now()).run();
+        try { await affAttach(env, a.id, s.metadata?.bw_click, (s.created || 0) * 1000 || now()); } catch (e) { console.error("aff", e?.message); }
         a = await refresh(env, a);
         return json(req, { token: await newToken(env, a.id), pro: isPro(a), email: a.email });
       }
@@ -396,6 +487,13 @@ export default {
         await env.DB.prepare("DELETE FROM transfers WHERE expires < ?1").bind(now()).run();
         await env.DB.prepare("INSERT INTO transfers (code, account_id, expires) VALUES (?1, ?2, ?3)").bind(code, a.id, now() + 10 * 60e3).run();
         return json(req, { code, url: `${SITE}/pro/?k=${code}`, expiresIn: 600 });
+      }
+      if (p === "/aff/attach" && M === "POST") {
+        const { click_id } = await req.json().catch(() => ({}));
+        if (!BW_ID.test(click_id || "")) return err(req, "bad_click", 400);
+        if (!(await hit(env, "aff_attach", "acct:" + a.id, 50))) return err(req, "rate_limited", 429);
+        await affAttach(env, a.id, click_id);
+        return json(req, { ok: true });
       }
       if (p === "/pro/logout" && M === "POST") {
         const t = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");

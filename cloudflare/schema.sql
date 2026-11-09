@@ -73,3 +73,12 @@ CREATE TABLE IF NOT EXISTS promo_uses (
   at INTEGER NOT NULL,
   PRIMARY KEY (code, account_id)
 );
+
+-- BrosWars Partner: kliknutí na odkaz tvůrce připsaná k účtu (historie; platí poslední připsané před platbou)
+CREATE TABLE IF NOT EXISTS aff_clicks (
+  account_id TEXT NOT NULL,
+  click_id TEXT NOT NULL,
+  attached_at INTEGER NOT NULL,
+  PRIMARY KEY (account_id, click_id)
+);
+CREATE INDEX IF NOT EXISTS aff_clicks_account_at ON aff_clicks (account_id, attached_at DESC);
