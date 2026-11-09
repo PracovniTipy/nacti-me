@@ -229,18 +229,35 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 .tune input[type="range"], .tune .check input { accent-color: var(--g1); }
 .partner { border-radius: 999px; }
 @media (prefers-reduced-motion: reduce) { body::before, .ai.busy { animation: none; } }
+
+/* ===== Jednodušší rozložení: volba výstupu nahoře, jeden náhled dole ===== */
+[hidden] { display: none !important; }
+.outs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.outs button { border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--fg); border-radius: 16px; padding: 14px 4px; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; transition: background .2s, color .2s; }
+.outs button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.stage { display: grid; gap: 14px; }
+#qrView { display: grid; gap: 14px; }
+.print { border-top: 0; padding-top: 0; }
+.upsell { text-align: center; font-size: 14px; color: var(--muted); text-decoration: none; padding: 4px; }
+.upsell b { color: var(--fg); }
+.upsell:hover { color: var(--fg); }
+.more { border-radius: 18px; }
+.more > summary { cursor: pointer; list-style: none; text-align: center; padding: 12px; border-radius: 14px; border: 1px solid var(--line); font-weight: 600; font-size: 14px; color: var(--muted); }
+.more > summary::-webkit-details-marker { display: none; }
+.more[open] > summary { margin-bottom: 12px; color: var(--fg); }
+@media (max-width: 420px) { .outs button { font-size: 13px; padding: 12px 2px; } }
 </style>
 
 <main class="app">
   <div class="mark"><a class="brand" href="https://nacti.me/">Načti<em>.me</em></a><a class="pro-pill" href="https://nacti.me/pro/">Pro</a></div>
-  <h1 class="hero">Co má kód <span>načíst?</span></h1>
+  <h1 class="hero">Co chcete <span>vytvořit?</span></h1>
 
-  <div class="code">
-    <canvas id="cv" aria-hidden="true"></canvas>
-    <img id="img" alt="QR kód">
-    <div class="idle" id="idle" hidden>Začněte psát</div>
+  <div class="outs" role="group" aria-label="Co vytvořit" id="outs">
+    <button type="button" data-o="qr" aria-pressed="true">QR kód</button>
+    <button type="button" data-o="card" aria-pressed="false">Vizitka</button>
+    <button type="button" data-o="a6" aria-pressed="false">Kartička</button>
+    <button type="button" data-o="sticker" aria-pressed="false">Samolepka</button>
   </div>
-  <div class="caption" aria-live="polite"><b id="kind"></b><span id="summary"></span></div>
 
   <section class="block" aria-label="Obsah kódu">
     <div class="modes" role="group" aria-label="Druh obsahu">
@@ -252,24 +269,35 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     </div>
     <div class="field" id="field"></div>
     <p class="err" id="err" hidden></p>
-    <div class="row">
-      <div class="inks" role="group" aria-label="Barva kódu" id="inks"></div>
-      <span class="check-line" id="minSize"></span>
-    </div>
-    <div class="save">
-      <button type="button" class="dl" id="dlPng" disabled>Stáhnout QR kód</button>
-      <button type="button" class="dl alt" id="dlSvg" disabled aria-label="Stáhnout jako SVG pro tisk">SVG</button>
-    </div>
   </section>
 
-  <section class="print" aria-labelledby="printTitle">
-    <h2 id="printTitle">Vytisknout <span>Navrhne AI</span></h2>
-    <div class="formats" role="group" aria-label="Co vytisknout" id="formats"></div>
-    <textarea id="brief" class="brief" rows="2" maxlength="300" aria-label="Vaše představa" placeholder="Popište svou představu, třeba: kadeřnictví, jemné a luxusní, zlatá"></textarea>
+  <section class="print" id="printBox" aria-label="Návrh" hidden>
+    <div class="formats" id="formats" hidden></div>
+    <textarea id="brief" class="brief" rows="2" maxlength="300" aria-label="Vaše představa" placeholder="Obor a představa, třeba: cukrářka, růžová, hravé"></textarea>
     <button type="button" class="ai" id="aiBtn" disabled>
       <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0l1.6 4.8L14.4 6.4 9.6 8 8 12.8 6.4 8 1.6 6.4 6.4 4.8zM13 10l.7 2.3L16 13l-2.3.7L13 16l-.7-2.3L10 13l2.3-.7z"/></svg>
-      <span id="aiLabel">Navrhnout s AI</span>
+      <span id="aiLabel">Navrhnout</span>
     </button>
+    <a class="upsell" id="upsell" href="https://nacti.me/pro/" hidden>✦ Vizitka přesně na míru s vlastní kresbou od AI je v <b>Načti.me Pro</b> →</a>
+  </section>
+
+  <section class="stage" aria-live="polite">
+    <div id="qrView">
+      <div class="code">
+        <canvas id="cv" aria-hidden="true"></canvas>
+        <img id="img" alt="QR kód">
+        <div class="idle" id="idle" hidden>Začněte psát</div>
+      </div>
+      <div class="caption"><b id="kind"></b><span id="summary"></span></div>
+      <div class="row">
+        <div class="inks" role="group" aria-label="Barva kódu" id="inks"></div>
+        <span class="check-line" id="minSize"></span>
+      </div>
+      <div class="save">
+        <button type="button" class="dl" id="dlPng" disabled>Stáhnout QR kód</button>
+        <button type="button" class="dl alt" id="dlSvg" disabled aria-label="Stáhnout jako SVG pro tisk">SVG</button>
+      </div>
+    </div>
     <div class="out" id="out" hidden>
       <div class="pv"><img id="pImg" alt="Náhled tiskoviny"></div>
       <p class="verdict" id="verdict"></p>
@@ -278,6 +306,8 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
         <button type="button" class="dl alt" id="againBtn">Jiný návrh</button>
       </div>
       <a class="partner" id="partner" href="#" target="_blank" rel="noopener sponsored" hidden>Nechte si to vytisknout profesionálně →</a>
+      <details class="more" id="more">
+        <summary>Upravit ručně</summary>
       <div class="tune">
         <label for="tHead" id="tHeadWrap">Nadpis<input type="text" id="tHead" maxlength="40"></label>
         <div class="chips" id="tLayout" role="group" aria-label="Styl"></div>
@@ -300,6 +330,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
           <button type="button" class="imgdel" id="tImgDel" hidden>Odebrat</button>
         </div>
       </div>
+      </details>
       <p class="note" id="pNote"></p>
     </div>
   </section>
@@ -524,6 +555,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     $('kind').textContent = current ? current.kind : '';
     $('summary').textContent = current ? current.summary : '';
     $('aiBtn').disabled = !current || busy;
+    if (!current && output !== 'qr') $('out').hidden = true;
     $('minSize').textContent = ''; $('minSize').className = 'check-line';
     renderFormats();
     if (!window.qrcode) return clearQr('Generátor se nenačetl. Obnovte stránku.');
@@ -534,7 +566,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     img.alt = `QR kód: ${current.kind} – ${current.summary}`;
     $('minSize').textContent = `Tisk od ${cm(minPrintCm(next.n))}`; $('minSize').className = 'check-line ok';
     show(next);
-    if (design && $('out').hidden === false) schedulePrint();
+    if (output !== 'qr') { if (design) schedulePrint(); else designPrint('local'); }
   }
 
   // ================= Stažení =================
@@ -652,8 +684,6 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     mode = b.dataset.mode;
     document.querySelectorAll('[data-mode]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
     renderField();
-    if (format === 'card' && mode !== 'card') format = 'a6';
-    if (mode === 'card') format = 'card';
     design = null; $('out').hidden = true; resetAiLabel();
     update();
     const first = $('field').querySelector('input:not([type=file])'); if (first) first.focus();
@@ -695,24 +725,36 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
   ];
   const DEFAULT_HEAD = { 'Odkaz': 'Navštivte nás', 'Text': 'Naskenujte', 'E-mail': 'Napište nám', 'Telefon': 'Zavolejte nám', 'Wi-Fi': 'Wi-Fi pro hosty', 'Platba': 'Zaplaťte QR platbou', 'Kontakt': '', 'Fotky': 'Prohlédněte si fotky' };
 
-  let format = 'card', design = null, busy = false, printCanvas = null, sample = null, presetIdx = 0;
+  let format = 'card', design = null, busy = false, printCanvas = null, sample = null, presetIdx = 0, output = 'qr';
+  // AI na míru (vlastní kresba): v náhledu na claude.ai, na nacti.me jen s Načti.me Pro
+  const premium = () => !!sample || (canUpload && isPro());
+  function renderOutputs() {
+    document.querySelectorAll('[data-o]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.o === output)));
+    const isQr = output === 'qr';
+    $('qrView').hidden = !isQr; $('printBox').hidden = isQr; $('out').hidden = isQr || !design;
+    $('upsell').hidden = isQr || premium();
+    $('brief').placeholder = output === 'card' ? 'Obor a představa, třeba: cukrářka, růžová, hravé' : 'Představa, třeba: kavárna, zelená, jemné';
+  }
+  document.querySelectorAll('[data-o]').forEach((b) => b.addEventListener('click', () => {
+    const o = b.dataset.o; if (o === output) return;
+    output = o;
+    if (o !== 'qr') {
+      if (o === 'card' && mode !== 'card') document.querySelector('[data-mode="card"]').click();
+      format = o;
+      if (design) { design = adaptDesign(design); syncTune(); renderPrint(); }
+      else if (current) designPrint('local');
+    }
+    renderOutputs(); resetAiLabel();
+  }));
   const used = { card: [], a6: [], sticker: [] };
   if (window.claude && claude.use) claude.use('sample').then((s) => { sample = s; resetAiLabel(); }).catch(() => {});
-  function resetAiLabel() { $('aiLabel').textContent = (sample || canUpload) ? 'Navrhnout s AI na míru' : 'Navrhnout'; }
+  function resetAiLabel() { $('aiLabel').textContent = premium() ? 'Navrhnout s AI na míru' : 'Upravit podle přání'; }
   resetAiLabel();
 
   function renderFormats() {
-    const list = mode === 'card' ? ['card', 'a6', 'sticker'] : ['a6', 'sticker'];
-    if (!list.includes(format)) format = list[0];
-    const html = list.map((k) => { const f = FORMATS[k]; return `<button type="button" data-f="${k}" aria-pressed="${k === format}"><i style="width:${f.icon[0]}px;height:${f.icon[1]}px"></i>${f.name}<small>${f.size}</small></button>`; }).join('');
-    if ($('formats').dataset.sig !== list.join() + format) {
-      $('formats').innerHTML = html; $('formats').dataset.sig = list.join() + format;
-      $('formats').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
-        if (format === b.dataset.f) return;
-        format = b.dataset.f; renderFormats();
-        if (design) { design = adaptDesign(design); syncTune(); renderPrint(); }
-      }));
-    }
+    if (output === 'card' && mode !== 'card') output = 'a6';
+    if (output !== 'qr') format = output;
+    renderOutputs();
   }
 
   const HEX = /^#[0-9a-f]{6}$/i;
@@ -888,7 +930,7 @@ Odpověz POUZE JSON objektem:
       headers: Object.assign({ 'content-type': 'application/json' }, authH()),
       body: JSON.stringify({ format, brief, info, motifs: MOTIF_ORDER.map((k) => [k, MOTIFS[k].label]), avoid: brief ? [] : used[format].slice(-3), current: design ? { layout: design.layout, bg: design.bg, ink: design.ink, accent: design.accent, display: design.display, text: design.text, upper: design.upper, nameScale: design.nameScale, textScale: design.textScale } : null }),
     });
-    if (!r.ok) throw { code: r.status === 429 ? 'rate_limited' : 'unavailable' };
+    if (!r.ok) throw { code: r.status === 402 ? 'pro_required' : r.status === 429 ? 'rate_limited' : 'unavailable' };
     return r.json();
   }
   const hasAi = () => !!sample || canUpload;
@@ -896,17 +938,18 @@ Odpověz POUZE JSON objektem:
   async function designPrint(kind) {
     if (busy || !current) return;
     const brief = $('brief').value.trim(), patch = parseBrief(brief);
-    const modify = kind !== 'new' && !!design && !!brief;
+    const modify = kind === 'ai' && !!design && !!brief;
+    const useAi = kind === 'ai' && premium();
     busy = true; $('aiBtn').disabled = true; $('againBtn').disabled = true; $('aiBtn').classList.add('busy');
-    $('aiLabel').textContent = hasAi() ? 'AI navrhuje podle přání…' : (modify ? 'Upravuji podle přání…' : 'Navrhuji…');
+    $('aiLabel').textContent = useAi ? 'AI kreslí na míru… (do 30 s)' : (modify ? 'Upravuji podle přání…' : 'Navrhuji…');
     if (used[format].length >= FORMATS[format].layouts.length) used[format].length = 0;
     let d = null, note = '';
-    if (hasAi()) {
+    if (useAi) {
       try {
         d = sample ? await aiDesign(brief) : await serverDesign(brief);
         note = (d && typeof d.why === 'string' && d.why.trim()) ? d.why.trim().slice(0, 160) : '';
       } catch (e) {
-        note = e && e.code === 'rate_limited' && !isPro() ? 'Dnes jste vyčerpali 3 AI návrhy zdarma. S Načti.me Pro jsou bez omezení.' : 'AI teď neodpověděla, zkuste to prosím znovu. Zatím jsme upravili barvy a písmo podle přání.';
+        note = e && e.code === 'pro_required' ? 'Vizitky na míru od AI jsou v Načti.me Pro. Zatím jsme upravili barvy, motiv a písmo podle přání.' : 'AI teď neodpověděla, zkuste to prosím znovu. Zatím jsme upravili barvy a písmo podle přání.';
         d = null;
       }
     }
@@ -930,10 +973,11 @@ Odpověz POUZE JSON objektem:
     const done = Object.keys(patch).filter((k) => k !== 'inkLocked').length;
     $('pNote').textContent = `${note || (done ? 'Upraveno podle vašeho přání.' : brief ? 'Návrh podle vašeho přání.' : 'Návrh na míru.')} Vše doladíte níže. Tisková kvalita ${format === 'a6' ? 300 : 600} DPI.`;
     busy = false; $('aiBtn').disabled = !current; $('againBtn').disabled = false; $('aiBtn').classList.remove('busy');
-    $('aiLabel').textContent = /vyčerpali/.test(note) ? 'Limit AI na dnes vyčerpán' : brief ? 'Upravit podle přání' : hasAi() ? 'Navrhnout znovu s AI' : 'Další návrh';
-    if (/vyčerpali|neodpověděla/.test(note)) { $('pNote').classList.add('warn'); $('pNote').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); } else $('pNote').classList.remove('warn');
+    resetAiLabel();
+    if (/Pro\.|neodpověděla/.test(note)) { $('pNote').classList.add('warn'); $('pNote').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); } else $('pNote').classList.remove('warn');
   }
   $('aiBtn').addEventListener('click', () => designPrint('ai'));
+  renderOutputs();
   $('againBtn').addEventListener('click', () => designPrint('new'));
   $('brief').addEventListener('input', () => { if (design) $('aiLabel').textContent = $('brief').value.trim() ? 'Upravit podle přání' : 'Navrhnout znovu s AI'; });
 
@@ -1069,11 +1113,11 @@ Odpověz POUZE JSON objektem:
     printCanvas = c;
     $('pImg').src = c.toDataURL('image/png');
     $('pImg').alt = `Náhled: ${FORMATS[format].name}`;
-    $('out').hidden = false;
+    $('out').hidden = output === 'qr';
     const v = $('verdict');
     const qrCm = (lastQrMm / 10).toLocaleString('cs-CZ', { maximumFractionDigits: 1 });
     if (lastModMm >= 0.4) { v.className = 'verdict ok'; v.textContent = `● QR na tisku ${qrCm} cm, načte se spolehlivě`; }
-    else if (lastModMm >= 0.3) { v.className = 'verdict warn'; v.textContent = `● QR na tisku ${qrCm} cm, načte se, ale je hustý. Zkraťte obsah, nebo zvolte větší formát.`; }
+    else if (lastModMm >= 0.3) { v.className = 'verdict ok'; v.textContent = `● QR na tisku ${qrCm} cm, načte se`; }
     else { v.className = 'verdict warn'; v.textContent = `● QR na tisku ${qrCm} cm je příliš hustý. Zkraťte obsah, nebo zvolte větší formát.`; }
   }
 

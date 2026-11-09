@@ -161,11 +161,12 @@ const hasWord = (text, words) => words.some((w) => String(text || "").toLowerCas
 async function design(req, env) {
   if (!env.ANTHROPIC_API_KEY) return err(req, "not_configured", 503);
   let body; try { body = await req.json(); } catch { return err(req, "bad_json", 400); }
+  // Vizitky na míru od AI (s vlastní kresbou) jsou výhoda Načti.me Pro
   const a = await account(req, env);
-  const counted = !isPro(a);
-  if (counted && !(await hit(env, "ai", ip(req), FREE_AI_DAILY))) return err(req, "rate_limited", 429);
-  // nepovedený návrh se do denního limitu nepočítá
-  const refund = () => counted && env.DB.prepare("UPDATE usage SET n = n - 1 WHERE kind = 'ai' AND ip = ?1 AND day = ?2 AND n > 0").bind(ip(req), today()).run();
+  if (!isPro(a)) return err(req, "pro_required", 402);
+  // ochrana proti zneužití: max. 200 návrhů denně na účet
+  if (!(await hit(env, "ai", "acct:" + a.id, 200))) return err(req, "rate_limited", 429);
+  const refund = () => env.DB.prepare("UPDATE usage SET n = n - 1 WHERE kind = 'ai' AND ip = ?1 AND day = ?2 AND n > 0").bind("acct:" + a.id, today()).run();
 
   const format = LAYOUTS[body?.format] ? body.format : "card";
   const brief = clip(body?.brief, 600);
@@ -184,27 +185,30 @@ async function design(req, env) {
     sticker: "QR kód je uprostřed v bílém poli. Motiv patří k okrajům a do rámu.",
   }[format];
   const ban = forbidden(brief);
-  const motifs = Array.isArray(body?.motifs) ? body.motifs.filter((m) => Array.isArray(m) && /^[a-z]{2,12}$/.test(m[0])).slice(0, 40).map((m) => `${m[0]} (${clip(m[1], 30)})`) : [];
   const prompt = `Jsi špičkový grafický designér a ilustrátor. Navrhni na míru tiskovinu: ${names[format]} s QR kódem.
 Údaje: ${JSON.stringify(info)}
 PŘÁNÍ ZÁKAZNÍKA (ZÁVAZNÉ, splň ho doslova a celé): ${brief || "(nic neuvedl, odvoď styl z oboru a údajů)"}
 ${ban.length ? `ZAKÁZANÁ SLOVA – nesmí se objevit nikde v textech (headline, tagline): ${ban.join(", ")}.` : ""}
 Pravidla:
 - Barvy z přání použij přesně (pozadí → bg, text → ink, detaily → accent). Velikost jména/údajů: nameScale 0.6–1.4, textScale 0.7–1.4. Styl, písmo a velká písmena dodrž.
-- Motiv pozadí kreslí aplikace sama. Vyber jeden klíč, který nejlépe sedí k oboru a přání${motifs.length ? ": " + motifs.join(", ") : ""}, nebo "none", když zákazník chce čistý design. Obor (cukrář, sklenář, zedník, automechanik…) poznáš z přání i z pozice a firmy.
+- Když zákazník chce motiv, obrázek, vzor nebo náladu (např. rozbité sklo, vlny, hory, květiny, mramor, neon), NAKRESLI ho jako SVG grafiku pozadí. Když motiv nechce, nakresli jemný abstraktní prvek, který sedí k oboru, nebo SVG vynech.
+- SVG: viewBox="${VB}", celé pozadí včetně podkladové barvy bg, jen vektorové tvary (path, polygon, line, circle, rect, linearGradient, radialGradient, filter s feTurbulence/feGaussianBlur). Žádný text, žádné obrázky, žádné externí odkazy. Do 7 kB.
+- ${zone}
+- "motif" = záložní motiv z knihovny aplikace, kdyby se SVG nepovedlo${body?.motifs ? ": " + (Array.isArray(body.motifs) ? body.motifs.filter((m) => Array.isArray(m) && /^[a-z]{2,12}$/.test(m[0])).map((m) => m[0]).join(", ") : "") : ""}, nebo "none".
 ${current ? "- Současný návrh: " + current + ". Pokud zákazník chce jen úpravu, uprav tento návrh a zbytek ponech." : ""}
 - Rozvržení: ${LAYOUTS[format].map((l) => `${l} (${HINTS[l]})`).join("; ")}. ${format === "card" ? "S výrazným motivem nejlépe sedí editorial nebo swiss." : ""}
 ${avoid.length && !brief ? "- Nepoužij rozvržení: " + avoid.join(", ") + "." : ""}
 - Písma pro nadpis: ${DISPLAY.join(", ")}. Písma pro údaje: ${TEXT.join(", ")}.
 - ${format === "card" ? "headline = jméno osoby beze změny. tagline = krátký slogan česky do 36 znaků, nebo prázdný (když si nejsi jistý, nech prázdný)." : "headline = krátká česká výzva do 28 znaků. tagline = doplňující věta česky do 40 znaků, nebo prázdný."}
 - Nevymýšlej žádné kontaktní ani platební údaje.
-Odpověz POUZE JSON objektem, bez dalšího textu a bez vysvětlování:
-{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"motif":"…","headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}`;
+Odpověz PŘESNĚ v tomto tvaru: nejdřív JSON na jednom řádku, pak SVG.
+{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"artOpacity":1,"motif":"…","headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}
+<svg …>…</svg>`;
 
   const r = await fetch(`${env.ANTHROPIC_API_BASE || "https://api.anthropic.com"}/v1/messages`, {
     method: "POST",
     headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: env.AI_MODEL || "claude-haiku-5-5", max_tokens: 2000, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: env.AI_MODEL || "claude-sonnet-5-5", max_tokens: 6000, messages: [{ role: "user", content: prompt }] }),
   });
   if (!r.ok) {
     const t = await r.text(); console.error(t);
