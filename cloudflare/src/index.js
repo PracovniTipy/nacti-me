@@ -198,13 +198,13 @@ ${avoid.length && !brief ? "- Nepoužij rozvržení: " + avoid.join(", ") + "." 
 - Písma pro nadpis: ${DISPLAY.join(", ")}. Písma pro údaje: ${TEXT.join(", ")}.
 - ${format === "card" ? "headline = jméno osoby beze změny. tagline = krátký slogan česky do 36 znaků, nebo prázdný (když si nejsi jistý, nech prázdný)." : "headline = krátká česká výzva do 28 znaků. tagline = doplňující věta česky do 40 znaků, nebo prázdný."}
 - Nevymýšlej žádné kontaktní ani platební údaje.
-Odpověz POUZE JSON objektem:
+Odpověz POUZE JSON objektem, bez dalšího textu a bez vysvětlování:
 {"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"motif":"…","headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}`;
 
   const r = await fetch(`${env.ANTHROPIC_API_BASE || "https://api.anthropic.com"}/v1/messages`, {
     method: "POST",
     headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: env.AI_MODEL || "claude-haiku-5-5", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: env.AI_MODEL || "claude-haiku-5-5", max_tokens: 2000, messages: [{ role: "user", content: prompt }] }),
   });
   if (!r.ok) {
     const t = await r.text(); console.error(t);
