@@ -191,6 +191,18 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .empty { text-align: center; padding: 36px 16px; color: var(--muted); display: grid; gap: 14px; justify-items: center; }
 .empty b { color: var(--ink); font-size: 20px; letter-spacing: -0.02em; }
 .dl-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.saved { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.sv { display: grid; gap: 10px; padding: 10px; border-radius: 16px; background: var(--panel2); border: 1px solid transparent; transition: border-color .2s, transform .15s; }
+.sv:hover { border-color: var(--line); transform: translateY(-2px); }
+.sv a.img { display: grid; place-items: center; aspect-ratio: 85 / 55; border-radius: 10px; overflow: hidden; background: #0c0b10; }
+.sv img { max-width: 100%; max-height: 100%; display: block; box-shadow: 0 10px 30px -12px rgba(0,0,0,.7); }
+.sv .meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 4px; }
+.sv .meta b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv .meta span { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.sv .acts { display: flex; gap: 6px; }
+.sv .acts .btn { flex: 1; padding: 8px 10px; font-size: 13px; text-align: center; }
+.sv .acts .del { flex: 0 0 auto; color: var(--muted); }
+.saved .empty { grid-column: 1 / -1; }
 .promo { display: flex; gap: 8px; }
 .promo input { flex: 1; min-width: 0; padding: 13px 18px; border-radius: 999px; border: 1px dashed var(--line); background: transparent; color: var(--ink); font: 600 15px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .promo input::placeholder { text-transform: none; letter-spacing: 0; font-family: var(--sans); font-weight: 400; color: var(--muted); }
@@ -290,6 +302,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
         <div class="bars" id="devices"></div>
       </div>
     </div>
+  </section>
+
+  <section class="panel" id="savedPanel">
+    <div class="ph"><h2>Moje vizitky</h2><span id="savedCount"></span></div>
+    <div class="saved" id="saved"></div>
   </section>
 
   <section class="panel">
@@ -618,6 +635,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     state = v;
     $('vLogin').hidden = v !== 'login'; $('vPay').hidden = v !== 'pay';
     $('vDash').style.display = v === 'dash' || v === 'demo' ? 'grid' : 'none';
+    $('savedPanel').style.display = v === 'dash' ? '' : 'none';
     $('demoBadge').hidden = v !== 'demo';
     $('newCode').hidden = v === 'login' || v === 'pay';
   }
@@ -633,6 +651,27 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   async function loadReal() {
     try { const j = await api('/codes'); data = realData(j.codes, j.scans); renderAll(); }
     catch (e) { toast('Data se nepodařilo načíst'); }
+    loadSaved();
+  }
+  const FMT = { card: 'Vizitka', a6: 'Kartička A6', sticker: 'Samolepka' };
+  async function loadSaved() {
+    let list = [];
+    try { list = (await api('/designs')).designs || []; } catch (e) { return; }
+    $('savedCount').textContent = list.length ? `${list.length} ${list.length === 1 ? 'uložená' : list.length < 5 ? 'uložené' : 'uložených'}` : '';
+    if (!list.length) {
+      $('saved').innerHTML = '<div class="empty"><b>Zatím žádná uložená vizitka</b><span>V aplikaci navrhněte vizitku a klikněte na „Uložit do mých vizitek“. Najdete ji tady.</span><a class="btn" href="../app/">Navrhnout vizitku</a></div>';
+      return;
+    }
+    $('saved').innerHTML = list.map((d) => `<article class="sv">
+        <a class="img" href="../app/?d=${d.id}" title="Otevřít a upravit">${d.thumb ? `<img src="${d.thumb}" alt="${esc(d.name)}" loading="lazy">` : ''}</a>
+        <div class="meta"><b>${esc(d.name)}</b><span>${FMT[d.format] || ''} · ${new Date(d.created_at).toLocaleDateString('cs-CZ')}</span></div>
+        <div class="acts"><a class="btn" href="../app/?d=${d.id}">Otevřít a upravit</a><button class="btn ghost del" type="button" data-del="${d.id}" aria-label="Smazat ${esc(d.name)}">Smazat</button></div>
+      </article>`).join('');
+    $('saved').querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+      if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Opravdu?'; setTimeout(() => { b.dataset.sure = ''; b.textContent = 'Smazat'; }, 3000); return; }
+      try { await api('/designs/' + b.dataset.del, 'DELETE'); toast('Smazáno'); loadSaved(); } catch (e) { toast('Smazání se nepovedlo'); }
+    }));
+    $('saved').querySelectorAll('a[href^="../app/"]').forEach((a) => a.addEventListener('click', () => setProCache(true, Date.now() + 3 * 864e5)));
   }
   function login(title, text, msg) { show('login'); $('loginTitle').innerHTML = title; $('loginText').textContent = text; $('loginMsg').textContent = msg || ''; }
   async function afterLogin() {

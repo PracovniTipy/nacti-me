@@ -273,6 +273,13 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 .az button + button { border-left: 1px solid var(--line); font-size: 18px; }
 .az button:hover { background: rgba(255,255,255,.08); }
 .az sup { font-size: .6em; margin-left: 1px; }
+
+/* Uložit do dashboardu (Pro) */
+.savepro { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 15px; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 700; font-size: 15px;
+  color: var(--fg); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.18); transition: background .2s, border-color .2s; }
+.savepro svg { width: 16px; height: 16px; }
+.savepro:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.35); }
+.savepro.done { border-color: var(--ok); color: var(--ok); }
 </style>
 
 <main class="app">
@@ -331,6 +338,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
         <button type="button" class="dl" id="dlPrint">Stáhnout pro tisk</button>
         <button type="button" class="dl alt" id="againBtn">Jiný návrh</button>
       </div>
+      <button type="button" class="savepro" id="saveDesign" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h8l3 3v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm1 1v4h7V2zm4 7a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg><span id="saveLabel">Uložit do mých vizitek</span></button>
       <a class="partner" id="partner" href="#" target="_blank" rel="noopener sponsored" hidden>Nechte si to vytisknout profesionálně →</a>
       <details class="more" id="more">
         <summary>Upravit ručně</summary>
@@ -799,6 +807,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     const pro = premium();
     $('upsell').hidden = isQr || pro;
     $('brief').hidden = !pro; $('aiBtn').hidden = !pro;
+    $('saveDesign').hidden = !(canUpload && isPro() && userToken());
     $('brief').placeholder = output === 'card' ? 'Obor a představa, třeba: cukrářka, růžová, hravé' : 'Představa, třeba: kavárna, zelená, jemné';
   }
   document.querySelectorAll('[data-o]').forEach((b) => b.addEventListener('click', () => {
@@ -1046,6 +1055,50 @@ Odpověz POUZE JSON objektem:
     if (/Pro\.|neodpověděla/.test(note)) { $('pNote').classList.add('warn'); $('pNote').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); } else $('pNote').classList.remove('warn');
   }
   $('aiBtn').addEventListener('click', () => designPrint('ai'));
+
+  // ---- Uložit do mých vizitek (dashboard Pro) a otevřít uloženou ----
+  function snapshot() {
+    const v = JSON.parse(JSON.stringify(values[mode] || {}));
+    if (mode === 'photo') v.items = (values.photo.items || []).filter((i) => i.status === 'ok').map((i) => ({ id: i.id, status: 'ok', thumb: API + '/f/' + i.id }));
+    let d = { ...design };
+    if (d.img && d.img.length > 600000) d.img = ''; // velké obrázky se do uložení nevejdou
+    return { mode, output, values: v, design: d };
+  }
+  function thumbOf(c) {
+    const t = document.createElement('canvas'), k = 480 / Math.max(c.width, c.height);
+    t.width = Math.round(c.width * k); t.height = Math.round(c.height * k); t.getContext('2d').drawImage(c, 0, 0, t.width, t.height);
+    return t.toDataURL('image/jpeg', 0.82);
+  }
+  $('saveDesign').addEventListener('click', async () => {
+    if (!design || !printCanvas) return;
+    const b = $('saveDesign'), l = $('saveLabel'); b.disabled = true; l.textContent = 'Ukládám…';
+    try {
+      const name = (mode === 'card' ? values.card.name || values.card.org : design.headline) || FORMATS[format].name;
+      const r = await fetch(`${API}/designs`, { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authH()),
+        body: JSON.stringify({ name, format, thumb: thumbOf(printCanvas), data: snapshot() }) });
+      if (!r.ok) throw r.status;
+      b.classList.add('done'); l.textContent = 'Uloženo do mých vizitek ✓';
+      setTimeout(() => { b.classList.remove('done'); l.textContent = 'Uložit do mých vizitek'; }, 3500);
+    } catch (e) { l.textContent = e === 402 ? 'Ukládání je v Načti.me Pro' : 'Uložení se nepovedlo, zkuste znovu'; }
+    b.disabled = false;
+  });
+  (async function openSaved() {
+    const id = new URLSearchParams(location.search).get('d');
+    if (!id || !/^[A-Za-z0-9]{10}$/.test(id) || !API || !userToken()) return;
+    try {
+      const r = await fetch(`${API}/designs/${id}`, { headers: authH() }); if (!r.ok) return;
+      const { data } = await r.json(); if (!data || !data.design) return;
+      const mb = document.querySelector(`[data-mode="${data.mode}"]`); if (mb) mb.click();
+      Object.assign(values[data.mode], data.values || {}); renderField();
+      if (data.design.img) await loadImg(data.design.img);
+      if (data.design.art) await loadArt(data.design.art);
+      output = data.output || 'card'; format = output === 'qr' ? 'card' : output;
+      design = cleanDesign(data.design); update(); syncTune(); renderOutputs(); renderPrint();
+      $('pNote').textContent = 'Otevřeno z mých vizitek. Upravte a uložte znovu jako novou.';
+      history.replaceState(null, '', location.pathname);
+      setTimeout(() => $('out').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }), 300);
+    } catch (e) {}
+  })();
   renderOutputs();
   $('againBtn').addEventListener('click', () => designPrint('new'));
 

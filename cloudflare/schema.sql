@@ -82,3 +82,15 @@ CREATE TABLE IF NOT EXISTS aff_clicks (
   PRIMARY KEY (account_id, click_id)
 );
 CREATE INDEX IF NOT EXISTS aff_clicks_account_at ON aff_clicks (account_id, attached_at DESC);
+
+-- Uložené vizitky, kartičky a samolepky (Pro)
+CREATE TABLE IF NOT EXISTS designs (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  format TEXT NOT NULL,
+  thumb TEXT,
+  data TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS designs_account ON designs (account_id, created_at DESC);

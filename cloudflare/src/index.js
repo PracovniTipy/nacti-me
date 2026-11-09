@@ -501,6 +501,32 @@ export default {
         return json(req, { ok: true });
       }
 
+      // ---- uložené vizitky a tiskoviny (Pro) ----
+      if (p === "/designs" && M === "GET") {
+        const { results } = await env.DB.prepare("SELECT id, name, format, thumb, created_at FROM designs WHERE account_id = ?1 ORDER BY created_at DESC LIMIT 200").bind(a.id).all();
+        return json(req, { designs: results.map((r) => ({ ...r, created_at: new Date(r.created_at).toISOString() })) });
+      }
+      if (p === "/designs" && M === "POST") {
+        if (!isPro(a)) return err(req, "pro_required", 402);
+        const raw = await req.text();
+        if (raw.length > 950000) return err(req, "too_big", 413);
+        let b; try { b = JSON.parse(raw); } catch { return err(req, "bad_json", 400); }
+        const fmt = ["card", "a6", "sticker"].includes(b.format) ? b.format : "card";
+        const thumb = typeof b.thumb === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(b.thumb) ? b.thumb.slice(0, 200000) : "";
+        const data = JSON.stringify(b.data || {});
+        const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM designs WHERE account_id = ?1").bind(a.id).first();
+        if (cnt.n >= 200) return err(req, "limit", 409);
+        const id = rand(10);
+        await env.DB.prepare("INSERT INTO designs (id, account_id, name, format, thumb, data, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").bind(id, a.id, clip(b.name, 80) || "Vizitka", fmt, thumb, data, now()).run();
+        return json(req, { id }, 201);
+      }
+      if ((m = p.match(/^\/designs\/([A-Za-z0-9]{10})$/))) {
+        const row = await env.DB.prepare("SELECT * FROM designs WHERE id = ?1 AND account_id = ?2").bind(m[1], a.id).first();
+        if (!row) return err(req, "not_found", 404);
+        if (M === "DELETE") { await env.DB.prepare("DELETE FROM designs WHERE id = ?1").bind(row.id).run(); return json(req, { ok: true }); }
+        if (M === "GET") return json(req, { id: row.id, name: row.name, format: row.format, data: JSON.parse(row.data || "{}") });
+      }
+
       // ---- kódy ----
       if (p === "/codes" && M === "GET") {
         const { results: codes } = await env.DB.prepare("SELECT id, name, target, active, created_at FROM codes WHERE account_id = ?1 ORDER BY created_at DESC").bind(a.id).all();
