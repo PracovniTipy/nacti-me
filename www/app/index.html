@@ -280,6 +280,15 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 .savepro svg { width: 16px; height: 16px; }
 .savepro:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.35); }
 .savepro.done { border-color: var(--ok); color: var(--ok); }
+
+/* Přesouvání tažením na náhledu */
+#pImg { touch-action: none; cursor: grab; user-select: none; -webkit-user-drag: none; }
+#pImg.dragging { cursor: grabbing; }
+.dragtip { margin: -4px 0 0; font-size: 13px; color: var(--muted); text-align: center; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
+.dragtip b { color: var(--fg); font-weight: 600; }
+.dragtip button { border: 1px solid var(--line); background: none; color: var(--fg); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.pv { position: relative; }
+.pv .hl { position: absolute; border: 2px dashed rgba(255,255,255,.85); border-radius: 8px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,.18); transition: opacity .15s; }
 </style>
 
 <main class="app">
@@ -333,6 +342,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     </div>
     <div class="out" id="out" hidden>
       <div class="pv"><img id="pImg" alt="Náhled tiskoviny"></div>
+      <p class="dragtip" id="dragTip">Jméno, údaje i QR kód přesunete <b>tažením přímo na vizitce</b>.<button type="button" id="offReset" hidden>Vrátit rozmístění</button></p>
       <p class="verdict" id="verdict"></p>
       <div class="save">
         <button type="button" class="dl" id="dlPrint">Stáhnout pro tisk</button>
@@ -851,6 +861,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
       art: typeof d.art === 'string' && /^<svg[\s>]/i.test(d.art) ? d.art : '', artOpacity: Math.min(1, Math.max(0.25, +d.artOpacity || 1)),
       motif: MOTIFS[d.motif] || d.motif === 'none' ? d.motif : '', motifOpacity: Math.min(1, Math.max(0.3, +d.motifOpacity || 1)),
       img: typeof d.img === 'string' && d.img.startsWith('data:image/') ? d.img : '', imgMode: d.imgMode === 'bg' ? 'bg' : 'logo',
+      off: (() => { const r = {}; for (const k of ['name', 'text', 'qr']) { const v = d.off && d.off[k]; if (Array.isArray(v) && v.every((n) => Number.isFinite(n))) r[k] = v.map((n) => Math.max(-0.95, Math.min(0.95, n))); } return r; })(),
     };
     if (!d.inkLocked && ratio(o.ink, o.bg) < 4.5) o.ink = lum(o.bg) > 0.3 ? '#111113' : '#f6f5f1';
     return adaptDesign(o);
@@ -1056,6 +1067,56 @@ Odpověz POUZE JSON objektem:
   }
   $('aiBtn').addEventListener('click', () => designPrint('ai'));
 
+  // ---- Přesouvání jména, údajů a QR kódu tažením na náhledu ----
+  (function dragOnPreview() {
+    const im = $('pImg'), pv = im.parentElement;
+    let drag = null, raf = 0;
+    const hl = document.createElement('div'); hl.className = 'hl'; hl.hidden = true; pv.append(hl);
+    const toCanvas = (e) => { const r = im.getBoundingClientRect(), F = FORMATS[format]; return [(e.clientX - r.left) / r.width * F.W, (e.clientY - r.top) / r.height * F.H, r]; };
+    function hit(px, py) {
+      const B = printCanvas && printCanvas._boxes; if (!B) return null;
+      const pad = FORMATS[format].W * 0.02;
+      for (const k of ['qr', 'name', 'text']) { const b = B[k]; if (b && px >= b[0] - pad && px <= b[2] + pad && py >= b[1] - pad && py <= b[3] + pad) return k; }
+      return null;
+    }
+    function showHl(k, r) {
+      const B = printCanvas && printCanvas._boxes, b = k && B && B[k]; if (!b) { hl.hidden = true; return; }
+      const F = FORMATS[format], pr = pv.getBoundingClientRect(), sx = r.width / F.W, sy = r.height / F.H;
+      hl.hidden = false; hl.style.left = (r.left - pr.left + b[0] * sx - 6) + 'px'; hl.style.top = (r.top - pr.top + b[1] * sy - 6) + 'px';
+      hl.style.width = ((b[2] - b[0]) * sx + 12) + 'px'; hl.style.height = ((b[3] - b[1]) * sy + 12) + 'px';
+    }
+    function quick() {
+      raf = 0; if (!design) return;
+      const c = drawPrint(format, design); printCanvas = c; im.src = c.toDataURL('image/jpeg', 0.85);
+      if (drag) showHl(drag.k, im.getBoundingClientRect());
+    }
+    im.addEventListener('pointermove', (e) => {
+      if (drag) {
+        const [px, py] = toCanvas(e), F = FORMATS[format];
+        const o = design.off = { ...(design.off || {}) };
+        o[drag.k] = [Math.max(-0.95, Math.min(0.95, drag.o[0] + (px - drag.x) / F.W)), Math.max(-0.95, Math.min(0.95, drag.o[1] + (py - drag.y) / F.H))];
+        if (!raf) raf = requestAnimationFrame(quick);
+        return;
+      }
+      if (e.pointerType === 'mouse') { const [px, py, r] = toCanvas(e), k = hit(px, py); im.style.cursor = k ? 'grab' : 'default'; showHl(k, r); }
+    });
+    im.addEventListener('pointerleave', () => { if (!drag) hl.hidden = true; });
+    im.addEventListener('pointerdown', (e) => {
+      if (!design) return;
+      const [px, py, r] = toCanvas(e), k = hit(px, py); if (!k) return;
+      e.preventDefault(); im.setPointerCapture(e.pointerId); im.classList.add('dragging');
+      drag = { k, x: px, y: py, o: (design.off && design.off[k]) || [0, 0] }; showHl(k, r);
+    });
+    const end = () => {
+      if (!drag) return; drag = null; im.classList.remove('dragging'); hl.hidden = true;
+      design = { ...design, n: undefined }; renderPrint(); syncOffReset();
+    };
+    im.addEventListener('pointerup', end); im.addEventListener('pointercancel', end);
+    im.addEventListener('dragstart', (e) => e.preventDefault());
+  })();
+  function syncOffReset() { $('offReset').hidden = !(design && design.off && Object.keys(design.off).length); }
+  $('offReset').addEventListener('click', () => { if (!design) return; design = { ...design, off: {} }; renderPrint(); syncOffReset(); });
+
   // ---- Uložit do mých vizitek (dashboard Pro) a otevřít uloženou ----
   function snapshot() {
     const v = JSON.parse(JSON.stringify(values[mode] || {}));
@@ -1160,6 +1221,7 @@ Odpověz POUZE JSON objektem:
     $('tImgDel').hidden = !d.img; $('tImgLabel').textContent = d.img ? 'Vyměnit obrázek' : 'Nahrát logo nebo obrázek';
     if (document.activeElement !== $('tHead')) $('tHead').value = d.headline || '';
     renderGallery();
+    syncOffReset();
   }
   let tweakTimer;
   function tweak(patch) { if (!design) return; design = { ...design, ...patch, n: undefined }; syncTune(); schedulePrint(); }
@@ -1200,12 +1262,23 @@ Odpověz POUZE JSON objektem:
   // ---- Kreslení tiskovin ----
   function setFont(x, w, size, fam, fb, it) { x.font = `${it ? 'italic ' : ''}${w} ${Math.round(size)}px "${fam}", ${fb}`; }
   function widthOf(x, t, tr) { return x.measureText(t).width + (tr ? tr * ([...t].length - 1) : 0); }
+  // Rozmístění: jméno, údaje a QR kód jdou posunout tažením na náhledu (OFF = posun v pixelech, BOX = kde co leží)
+  let OFF = null, BOX = null, GRP = 'text';
   function txt(x, t, X, Y, tr, align) {
     tr = tr || 0; align = align || 'left';
     const w = widthOf(x, t, tr);
     let cx = align === 'center' ? X - w / 2 : align === 'right' ? X - w : X;
-    if (!tr) { x.fillText(t, cx, Y); return w; }
-    for (const ch of t) { x.fillText(ch, cx, Y); cx += x.measureText(ch).width + tr; }
+    const fs = +(x.font.match(/(\d+)px/) || [0, 0])[1], g = fs > 420 ? null : GRP; // obří ozdobné iniciály se nehýbou
+    const o = g && OFF && OFF[g], m = x.getTransform();
+    if (o) { x.save(); x.setTransform(1, 0, 0, 1, o[0], o[1]); x.transform(m.a, m.b, m.c, m.d, m.e, m.f); }
+    if (!tr) x.fillText(t, cx, Y);
+    else { let c2 = cx; for (const ch of t) { x.fillText(ch, c2, Y); c2 += x.measureText(ch).width + tr; } }
+    if (o) x.restore();
+    if (g && BOX && t.trim()) {
+      const pts = [[cx, Y - fs * 0.82], [cx + w, Y - fs * 0.82], [cx, Y + fs * 0.22], [cx + w, Y + fs * 0.22]].map(([a, b]) => [m.a * a + m.c * b + m.e + (o ? o[0] : 0), m.b * a + m.d * b + m.f + (o ? o[1] : 0)]);
+      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]), r = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+      const b = BOX[g]; BOX[g] = b ? [Math.min(b[0], r[0]), Math.min(b[1], r[1]), Math.max(b[2], r[2]), Math.max(b[3], r[3])] : r;
+    }
     return w;
   }
   function fitSize(x, t, maxW, start, min, set, tr) { let s = start; for (; s > min; s -= 2) { set(s); if (widthOf(x, t, tr ? tr(s) : 0) <= maxW) break; } set(s); return s; }
@@ -1536,7 +1609,11 @@ Odpověz POUZE JSON objektem:
   }
 
   function drawPrint(fmt, d) {
-    const c = drawPrintBase(fmt, d);
+    const F = FORMATS[fmt], o = d.off || {};
+    OFF = {}; ['name', 'text', 'qr'].forEach((k) => { if (o[k]) OFF[k] = [o[k][0] * F.W, o[k][1] * F.H]; });
+    BOX = {}; GRP = 'text';
+    let c;
+    try { c = drawPrintBase(fmt, d); } finally { c && (c._boxes = BOX); OFF = null; BOX = null; GRP = 'text'; }
     drawUserLogo(c.getContext('2d'), d, c.width, c.height, fmt);
     return c;
   }
@@ -1548,10 +1625,11 @@ Odpověz POUZE JSON objektem:
     const caseIt = (s) => (d.upper ? s.toLocaleUpperCase('cs') : s);
     const nameTr = (s) => (d.upper ? s * 0.06 : -s * 0.012);
     const fill = (c) => { x.fillStyle = c; };
-    const setName = (s) => setFont(x, D.w, s, d.display, D.fb, false);
-    const setText = (s, w) => setFont(x, w || Tx.w, s, d.text, Tx.fb, false);
-    const setLabel = (s) => setFont(x, 500, s, 'DM Mono', 'ui-monospace, monospace', false);
-    const setItalic = (s) => setFont(x, D.it ? 400 : Tx.w, s, D.it ? d.display : d.text, D.it ? D.fb : Tx.fb, D.it);
+    const setName = (s) => { GRP = 'name'; setFont(x, D.w, s, d.display, D.fb, false); };
+    let inRows = false; // kontaktní údaje = skupina „text“, vše ostatní (jméno, pozice, slogan) = „name“
+    const setText = (s, w) => { GRP = inRows ? 'text' : 'name'; setFont(x, w || Tx.w, s, d.text, Tx.fb, false); };
+    const setLabel = (s) => { GRP = inRows ? 'text' : 'name'; setFont(x, 500, s, 'DM Mono', 'ui-monospace, monospace', false); };
+    const setItalic = (s) => { GRP = 'name'; setFont(x, D.it ? 400 : Tx.w, s, D.it ? d.display : d.text, D.it ? D.fb : Tx.fb, D.it); };
     const labelColor = (bg) => (ratio(d.accent, bg) >= 3 ? d.accent : rgba(on(bg) === '#ffffff' ? '#ffffff' : '#111113', 0.55));
     const lightBg = (bg) => lum(bg) > 0.82;
     const details = current.details || [];
@@ -1566,6 +1644,8 @@ Odpověz POUZE JSON objektem:
         Y = Math.abs(cy - H / 2) < H * 0.08 ? cy - S2 / 2 : cy > H / 2 ? Y + S - S2 : Y;
         S = S2; X = Math.max(m, Math.min(W - m - S, X)); Y = Math.max(m, Math.min(H - m - S, Y));
       }
+      if (OFF && OFF.qr) { X = Math.max(0, Math.min(W - S, X + OFF.qr[0])); Y = Math.max(0, Math.min(H - S, Y + OFF.qr[1])); }
+      if (BOX) BOX.qr = [X, Y, X + S, Y + S];
       const m = matrix(current.data, ecl || (fmt === 'card' ? 'L' : 'M')), q = tile ? 3 : 0, tot = m.n + q * 2;
       if (tile) { fill('#ffffff'); roundRect(x, X, Y, S, S, radius ?? 26); x.fill(); }
       const qrInk = ratio(d.ink, '#ffffff') >= 7 ? d.ink : '#111113';
@@ -1584,6 +1664,7 @@ Odpověz POUZE JSON objektem:
       lastQrMm = (cell * tot) / ppm; lastModMm = cell / ppm;
     }
     function detailRows(X, top, maxW, size, lh, bg, labelW, align, ink) {
+      inRows = true;
       size *= TS; lh *= TS; labelW = (labelW ?? 64) * TS; ink = ink || d.ink;
       let y = top;
       for (const [k, v] of rowsSrc) {
@@ -1599,6 +1680,7 @@ Odpověz POUZE JSON objektem:
         }
         y += lh;
       }
+      inRows = false;
       return y;
     }
     const rowsH = (lh) => Math.max(0, rowsSrc.length - 1) * lh * TS;
