@@ -677,6 +677,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       catch (e) { $('payBtn').disabled = false; $('payMsg').className = 'gmsg err'; $('payMsg').textContent = e.code === 'not_configured' ? 'Platby se právě spouštějí. Zkuste to prosím za chvíli.' : 'Platbu se nepodařilo otevřít. Zkuste to znovu.'; }
     });
     $('logout1').addEventListener('click', logout);
+    if (/^#t=[A-Za-z0-9]{20,}$/.test(location.hash)) { tok.set(location.hash.slice(3)); history.replaceState(null, '', location.pathname); }
     const q = new URLSearchParams(location.search), sid = q.get('s'), k = q.get('k');
     if (sid || k) {
       history.replaceState(null, '', location.pathname);
