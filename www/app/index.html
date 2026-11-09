@@ -648,7 +648,14 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     img.alt = `QR kód: ${current.kind} – ${current.summary}`;
     $('minSize').textContent = `Tisk od ${cm(minPrintCm(next.n))}`; $('minSize').className = 'check-line ok';
     show(next);
-    if (output !== 'qr') { if (design) schedulePrint(); else designPrint('local'); }
+    if (output !== 'qr') {
+      // Motiv podle oboru se doplní sám, jakmile zákazník napíše pozici nebo firmu (dokud ho nezvolí ručně)
+      if (design && !design.motifSet && mode === 'card' && !design.art) {
+        const mo = findMotif([values.card.title, values.card.org, values.card.web].join(' '));
+        if (mo && mo !== design.motif) { design = { ...design, motif: mo }; syncTune(); }
+      }
+      if (design) schedulePrint(); else designPrint('local');
+    }
   }
 
   // ================= Stažení =================
@@ -859,7 +866,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
       tagline: typeof d.tagline === 'string' ? d.tagline.trim().replace(/\s+/g, ' ').slice(0, 44) : '',
       nameScale: Math.min(2.5, Math.max(0.6, +d.nameScale || 1)), textScale: Math.min(2.5, Math.max(0.7, +d.textScale || 1)), qrScale: Math.min(2.2, Math.max(0.7, +d.qrScale || 1)),
       art: typeof d.art === 'string' && /^<svg[\s>]/i.test(d.art) ? d.art : '', artOpacity: Math.min(1, Math.max(0.25, +d.artOpacity || 1)),
-      motif: MOTIFS[d.motif] || d.motif === 'none' ? d.motif : '', motifOpacity: Math.min(1, Math.max(0.3, +d.motifOpacity || 1)),
+      motifSet: !!d.motifSet, motif: MOTIFS[d.motif] || d.motif === 'none' ? d.motif : '', motifOpacity: Math.min(1, Math.max(0.3, +d.motifOpacity || 1)),
       img: typeof d.img === 'string' && d.img.startsWith('data:image/') ? d.img : '', imgMode: d.imgMode === 'bg' ? 'bg' : 'logo',
       off: (() => { const r = {}; for (const k of ['name', 'text', 'qr']) { const v = d.off && d.off[k]; if (Array.isArray(v) && v.every((n) => Number.isFinite(n))) r[k] = v.map((n) => Math.max(-0.95, Math.min(0.95, n))); } return r; })(),
     };
@@ -1236,7 +1243,7 @@ Odpověz POUZE JSON objektem:
   $('tAllMinus').addEventListener('click', () => allText(-0.1));
   $('tUpper').addEventListener('change', (e) => tweak({ upper: e.target.checked }));
   $('tHead').addEventListener('input', (e) => tweak({ headline: e.target.value }));
-  $('tMotif').addEventListener('change', (e) => tweak({ motif: e.target.value, art: '' }));
+  $('tMotif').addEventListener('change', (e) => tweak({ motif: e.target.value, art: '', motifSet: true }));
   $('tImgMode').addEventListener('change', (e) => tweak({ imgMode: e.target.value }));
   $('tImgDel').addEventListener('click', () => tweak({ img: '' }));
   $('tImg').addEventListener('change', async (e) => {
