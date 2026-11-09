@@ -292,7 +292,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   </section>
 
   <section class="panel">
-    <div class="ph"><h2>Moje kódy</h2><span id="codesCount"></span></div>
+    <div class="ph"><h2>Moje kódy</h2><span id="codesCount"></span><button class="btn ghost" type="button" id="dynBtn" style="margin-left:auto;padding:7px 14px;font-size:13px">+ Dynamický kód</button></div>
     <div class="codes" id="codes"></div>
   </section>
   </div>
@@ -552,6 +552,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     setTimeout(() => (isNew ? $('dName') : $('dUrl')).focus(), 300);
   }
   function closeDrawer() { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); $('drawer').setAttribute('aria-hidden', 'true'); }
+  $('dynBtn').addEventListener('click', () => openDrawer(null));
   $('dClose').addEventListener('click', closeDrawer); $('scrim').addEventListener('click', closeDrawer);
   addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
   $('newCode').addEventListener('click', (e) => { if (data && (live || !onSite) && state === 'dash' && live) { e.preventDefault(); openDrawer(null); } });
@@ -644,13 +645,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     setProCache(!!st.pro, st.pro ? Date.now() + 3 * 864e5 : 0);
     if (!st.pro) { show('pay'); $('logout1').hidden = false; if (st.error === 'not_configured') $('payMsg').textContent = 'Platby se právě spouštějí. Zkuste to prosím za chvíli.'; return; }
     show('dash');
-    $('topRight').innerHTML = '<button class="btn ghost" type="button" id="deviceBtn">Přidat zařízení</button><button class="btn ghost" type="button" id="portalBtn">Předplatné</button><button class="btn ghost" type="button" id="logout2">Odhlásit</button><a class="btn" id="newCode2" href="#">Nový kód</a>';
+    $('topRight').innerHTML = '<button class="btn ghost" type="button" id="deviceBtn">Přidat zařízení</button><button class="btn ghost" type="button" id="portalBtn">Předplatné</button><button class="btn ghost" type="button" id="logout2">Odhlásit</button><a class="btn" id="newCode2" href="../app/">Nový kód</a>';
     $('deviceBtn').addEventListener('click', addDevice);
     if (st.owner) { const pb = document.createElement('button'); pb.className = 'btn ghost'; pb.type = 'button'; pb.textContent = 'Promokódy'; pb.addEventListener('click', promosBox); $('topRight').prepend(pb); }
     if (!st.stripe) $('portalBtn').remove();
     else $('portalBtn').addEventListener('click', async () => { try { const r = await api('/pro/portal', 'POST'); location.href = r.url; } catch (e) { toast('Správu předplatného teď nejde otevřít'); } });
     $('logout2').addEventListener('click', logout);
-    $('newCode2').addEventListener('click', (e) => { e.preventDefault(); openDrawer(null); });
+    // Nový kód = aplikace v Pro verzi (Pro stav i přihlášení si aplikace přečte z tohoto prohlížeče)
+    $('newCode2').addEventListener('click', () => setProCache(true, Date.now() + 3 * 864e5));
     await loadReal();
     // živé novinky každých 20 s
     setInterval(async () => {
