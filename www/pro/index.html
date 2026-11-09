@@ -648,7 +648,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     $('deviceBtn').addEventListener('click', addDevice);
     if (st.owner) { const pb = document.createElement('button'); pb.className = 'btn ghost'; pb.type = 'button'; pb.textContent = 'Promokódy'; pb.addEventListener('click', promosBox); $('topRight').prepend(pb); }
     if (!st.stripe) $('portalBtn').remove();
-    $('portalBtn').addEventListener('click', async () => { try { const r = await api('/pro/portal', 'POST'); location.href = r.url; } catch (e) { toast('Správu předplatného teď nejde otevřít'); } });
+    else $('portalBtn').addEventListener('click', async () => { try { const r = await api('/pro/portal', 'POST'); location.href = r.url; } catch (e) { toast('Správu předplatného teď nejde otevřít'); } });
     $('logout2').addEventListener('click', logout);
     $('newCode2').addEventListener('click', (e) => { e.preventDefault(); openDrawer(null); });
     await loadReal();
