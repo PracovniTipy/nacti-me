@@ -246,6 +246,27 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 .more > summary::-webkit-details-marker { display: none; }
 .more[open] > summary { margin-bottom: 12px; color: var(--fg); }
 @media (max-width: 420px) { .outs button { font-size: 13px; padding: 12px 2px; } }
+
+/* ===== Upravit ručně: oddíly a posuvníky ===== */
+.tune { gap: 0; padding: 6px 18px; }
+.sec { display: grid; gap: 14px; padding: 18px 0; border-top: 1px solid var(--line); }
+.tune > .sec:first-of-type { border-top: 0; }
+.sec-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sec h3 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-family: var(--mono); }
+.sl { display: grid !important; grid-template-columns: 1fr auto; align-items: center; gap: 8px 12px !important; font-size: 14px !important; color: var(--fg) !important; }
+.sl output { font-family: var(--mono); font-size: 13px; color: var(--muted) !important; min-width: 4.5ch; text-align: right; }
+.sl input[type="range"] { grid-column: 1 / -1; width: 100%; height: 28px; margin: 0; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+.sl input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 99px; background: linear-gradient(90deg, var(--g1), var(--g2)) 0 / var(--p, 50%) 100% no-repeat, rgba(255,255,255,.1); }
+.sl input[type="range"]::-moz-range-track { height: 6px; border-radius: 99px; background: rgba(255,255,255,.1); }
+.sl input[type="range"]::-moz-range-progress { height: 6px; border-radius: 99px; background: linear-gradient(90deg, var(--g1), var(--g2)); }
+.sl input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.45), 0 0 0 4px rgba(255,255,255,.08); transition: transform .15s; }
+.sl input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.45); }
+.sl input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
+.az { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.az button { border: 0; background: transparent; color: var(--fg); font: 700 15px/1 var(--sans); padding: 8px 14px; cursor: pointer; }
+.az button + button { border-left: 1px solid var(--line); font-size: 18px; }
+.az button:hover { background: rgba(255,255,255,.08); }
+.az sup { font-size: .6em; margin-left: 1px; }
 </style>
 
 <main class="app">
@@ -310,24 +331,37 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
         <summary>Upravit ručně</summary>
       <div class="tune">
         <label for="tHead" id="tHeadWrap">Nadpis<input type="text" id="tHead" maxlength="40"></label>
-        <div class="chips" id="tLayout" role="group" aria-label="Styl"></div>
-        <div class="gallery" id="gallery" role="group" aria-label="100 hotových návrhů" hidden></div>
-        <div class="tune-row">
-          <label for="tDisplay">Písmo nadpisu<select id="tDisplay"></select></label>
-          <label for="tText">Písmo údajů a čísel<select id="tText"></select></label>
+
+        <div class="sec">
+          <div class="sec-h"><h3>Velikost</h3>
+            <div class="az" role="group" aria-label="Všechen text"><button type="button" id="tAllMinus" aria-label="Zmenšit všechen text">A<sup>−</sup></button><button type="button" id="tAllPlus" aria-label="Zvětšit všechen text">A<sup>+</sup></button></div>
+          </div>
+          <label class="sl" for="tName"><span>Jméno a nadpis</span><output id="tNameV">100 %</output><input type="range" id="tName" min="60" max="180" step="5" value="100"></label>
+          <label class="sl" for="tSize"><span>Údaje a čísla</span><output id="tSizeV">100 %</output><input type="range" id="tSize" min="70" max="180" step="5" value="100"></label>
+          <label class="sl" for="tQr"><span>QR kód</span><output id="tQrV">100 %</output><input type="range" id="tQr" min="70" max="150" step="5" value="100"></label>
         </div>
-        <div class="tune-row">
-          <label for="tName">Velikost nadpisu <output id="tNameV">100 %</output><input type="range" id="tName" min="60" max="140" step="5" value="100"></label>
-          <label for="tSize">Velikost údajů <output id="tSizeV">100 %</output><input type="range" id="tSize" min="70" max="140" step="5" value="100"></label>
+
+        <div class="sec">
+          <div class="sec-h"><h3>Styl</h3></div>
+          <div class="chips" id="tLayout" role="group" aria-label="Styl"></div>
+          <div class="gallery" id="gallery" role="group" aria-label="100 hotových návrhů" hidden></div>
+          <div class="tune-row">
+            <label for="tDisplay">Písmo nadpisu<select id="tDisplay"></select></label>
+            <label for="tText">Písmo údajů<select id="tText"></select></label>
+          </div>
+          <label class="check" for="tUpper"><input type="checkbox" id="tUpper"> Nadpis velkými písmeny</label>
         </div>
-        <label class="check" for="tUpper"><input type="checkbox" id="tUpper"> Nadpis velkými písmeny</label>
-        <div class="tune-row">
-          <label for="tMotif">Motiv pozadí<select id="tMotif"></select></label>
-          <label for="tImgMode">Vlastní obrázek<select id="tImgMode"><option value="logo">Jako logo</option><option value="bg">Jako pozadí</option></select></label>
-        </div>
-        <div class="imgrow">
-          <label class="imgbtn" for="tImg"><input type="file" id="tImg" accept="image/*" hidden><span id="tImgLabel">Nahrát logo nebo obrázek</span></label>
-          <button type="button" class="imgdel" id="tImgDel" hidden>Odebrat</button>
+
+        <div class="sec">
+          <div class="sec-h"><h3>Obrázek</h3></div>
+          <div class="tune-row">
+            <label for="tMotif">Motiv pozadí<select id="tMotif"></select></label>
+            <label for="tImgMode">Vlastní obrázek<select id="tImgMode"><option value="logo">Jako logo</option><option value="bg">Jako pozadí</option></select></label>
+          </div>
+          <div class="imgrow">
+            <label class="imgbtn" for="tImg"><input type="file" id="tImg" accept="image/*" hidden><span id="tImgLabel">Nahrát logo nebo obrázek</span></label>
+            <button type="button" class="imgdel" id="tImgDel" hidden>Odebrat</button>
+          </div>
         </div>
       </div>
       </details>
@@ -772,7 +806,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
       display: DISPLAY[d.display] ? d.display : 'Fraunces', text: TEXT[d.text] ? d.text : 'Geist', upper: !!d.upper,
       headline: typeof d.headline === 'string' ? d.headline.trim().replace(/\s+/g, ' ').slice(0, 40) : '',
       tagline: typeof d.tagline === 'string' ? d.tagline.trim().replace(/\s+/g, ' ').slice(0, 44) : '',
-      nameScale: Math.min(1.4, Math.max(0.6, +d.nameScale || 1)), textScale: Math.min(1.4, Math.max(0.7, +d.textScale || 1)),
+      nameScale: Math.min(1.8, Math.max(0.6, +d.nameScale || 1)), textScale: Math.min(1.8, Math.max(0.7, +d.textScale || 1)), qrScale: Math.min(1.5, Math.max(0.7, +d.qrScale || 1)),
       art: typeof d.art === 'string' && /^<svg[\s>]/i.test(d.art) ? d.art : '', artOpacity: Math.min(1, Math.max(0.25, +d.artOpacity || 1)),
       motif: MOTIFS[d.motif] || d.motif === 'none' ? d.motif : '', motifOpacity: Math.min(1, Math.max(0.3, +d.motifOpacity || 1)),
       img: typeof d.img === 'string' && d.img.startsWith('data:image/') ? d.img : '', imgMode: d.imgMode === 'bg' ? 'bg' : 'logo',
@@ -829,6 +863,8 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     else if (big(/(menší|drobn)[^,.]*(jméno|nadpis)|(jméno|nadpis)[^,.]*(menší|drobn)/)) o.nameScale = 0.8;
     if (big(/(větší|velké|čitelnější)[^,.]*(údaj|text|kontakt|čísl|telefon|e-mail)|(údaj|text|kontakt|čísl|telefon)[^,.]*(větší|velké)/)) o.textScale = 1.2;
     else if (big(/(menší|drobn)[^,.]*(údaj|text|kontakt|čísl)|(údaj|text|kontakt|čísl)[^,.]*(menší|drobn)/)) o.textScale = 0.85;
+    if (big(/(větší|velk|výrazn)[^,.]*(qr|kód)|(qr|kód)[^,.]*(větší|velk)/)) o.qrScale = 1.3;
+    else if (big(/(menší|malý|drobn)[^,.]*(qr|kód)|(qr|kód)[^,.]*(menší|malý)/)) o.qrScale = 0.8;
     // písmo
     if (/velkými|verzál|kapitál/.test(t)) o.upper = true;
     if (/malými písm/.test(t)) o.upper = false;
@@ -906,7 +942,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
     const prompt = `Jsi špičkový grafický designér se zkušenostmi z předních studií. Navrhni odvážnou, kreativní a profesionální tiskovinu: ${FORMATS[format].name} (${FORMATS[format].size}) s QR kódem.
 Kontext: ${JSON.stringify(ctxInfo)}
 Přání zákazníka (ZÁVAZNÉ, má přednost před vším ostatním): ${brief || '(neuvedl, odvoď styl z oboru a údajů)'}
-Když zákazník uvede barvu, použij ji přesně (pozadí → bg, text → ink, detaily → accent). Když chce větší nebo menší jméno či údaje, nastav nameScale (0.6–1.4) nebo textScale (0.7–1.4). Když chce styl, písmo nebo velká písmena, dodrž to.
+Když zákazník uvede barvu, použij ji přesně (pozadí → bg, text → ink, detaily → accent). Když chce větší nebo menší jméno či údaje, nastav nameScale (0.6–1.8) nebo textScale (0.7–1.8). Když chce styl, písmo nebo velká písmena, dodrž to.
 ${design ? 'Současný návrh: ' + JSON.stringify({ layout: design.layout, bg: design.bg, ink: design.ink, accent: design.accent, display: design.display, text: design.text, upper: design.upper, nameScale: design.nameScale, textScale: design.textScale }) + ' – pokud zákazník chce jen úpravu, uprav tento návrh a zbytek ponech.' : ''}
 Rozvržení k výběru: ${L.map((l) => `${l} (${LAYOUT_HINTS[l]})`).join('; ')}.
 ${avoid.length && !brief ? 'NEPOUŽÍVEJ rozvržení: ' + avoid.join(', ') + '.' : ''}
@@ -959,6 +995,7 @@ Odpověz POUZE JSON objektem:
     if (mode === 'card') d.headline = current.headline;
     if (!modify && design && !patch.nameScale && !d.nameScale) d.nameScale = design.nameScale;
     if (!modify && design && !patch.textScale && !d.textScale) d.textScale = design.textScale;
+    if (design && design.qrScale) d.qrScale = design.qrScale;
     if (!d.motif) d.motif = mode === 'card' ? findMotif([values.card.title, values.card.org, values.card.web].join(' ')) : '';
     if (design && design.img) { d.img = design.img; d.imgMode = design.imgMode; }
     const ban = forbiddenWords(brief);
@@ -1029,8 +1066,8 @@ Odpověz POUZE JSON objektem:
     $('tLayout').innerHTML = FORMATS[format].layouts.map((l) => `<button type="button" data-l="${l}" aria-pressed="${l === d.layout}">${LAYOUT_NAMES[l]}</button>`).join('');
     $('tLayout').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => tweak({ layout: b.dataset.l })));
     $('tDisplay').value = d.display; $('tText').value = d.text; $('tUpper').checked = !!d.upper;
-    $('tName').value = Math.round(d.nameScale * 100); $('tSize').value = Math.round(d.textScale * 100);
-    $('tNameV').textContent = $('tName').value + ' %'; $('tSizeV').textContent = $('tSize').value + ' %';
+    $('tName').value = Math.round(d.nameScale * 100); $('tSize').value = Math.round(d.textScale * 100); $('tQr').value = Math.round((d.qrScale || 1) * 100);
+    [['tName', 'tNameV'], ['tSize', 'tSizeV'], ['tQr', 'tQrV']].forEach(([id, o]) => { const el = $(id); $(o).textContent = el.value + ' %'; el.style.setProperty('--p', ((el.value - el.min) / (el.max - el.min) * 100) + '%'); });
     $('tHeadWrap').hidden = mode === 'card';
     if (!$('tMotif').options.length) $('tMotif').innerHTML = '<option value="none">Bez motivu</option>' + MOTIF_ORDER.map((k) => `<option value="${k}">${MOTIFS[k].label}</option>`).join('');
     $('tMotif').value = d.motif && d.motif !== 'none' ? d.motif : 'none';
@@ -1046,6 +1083,10 @@ Odpověz POUZE JSON objektem:
   $('tText').addEventListener('change', (e) => tweak({ text: e.target.value }));
   $('tName').addEventListener('input', (e) => tweak({ nameScale: e.target.value / 100 }));
   $('tSize').addEventListener('input', (e) => tweak({ textScale: e.target.value / 100 }));
+  $('tQr').addEventListener('input', (e) => tweak({ qrScale: e.target.value / 100 }));
+  const allText = (k) => { if (!design) return; tweak({ nameScale: Math.min(1.8, Math.max(0.6, Math.round((design.nameScale + k) * 20) / 20)), textScale: Math.min(1.8, Math.max(0.7, Math.round((design.textScale + k) * 20) / 20)) }); };
+  $('tAllPlus').addEventListener('click', () => allText(0.1));
+  $('tAllMinus').addEventListener('click', () => allText(-0.1));
   $('tUpper').addEventListener('change', (e) => tweak({ upper: e.target.checked }));
   $('tHead').addEventListener('input', (e) => tweak({ headline: e.target.value }));
   $('tMotif').addEventListener('change', (e) => tweak({ motif: e.target.value, art: '' }));
@@ -1433,6 +1474,13 @@ Odpověz POUZE JSON objektem:
     const head = caseIt(d.headline || '');
 
     function qr(X, Y, S, tile, radius, ecl) {
+      const qk = d.qrScale || 1;
+      if (qk !== 1) {
+        const m = Math.min(W, H) * 0.045, S2 = Math.min(S * qk, Math.min(W, H) - m * 2), cx = X + S / 2, cy = Y + S / 2;
+        X = Math.abs(cx - W / 2) < W * 0.08 ? cx - S2 / 2 : cx > W / 2 ? X + S - S2 : X;
+        Y = Math.abs(cy - H / 2) < H * 0.08 ? cy - S2 / 2 : cy > H / 2 ? Y + S - S2 : Y;
+        S = S2; X = Math.max(m, Math.min(W - m - S, X)); Y = Math.max(m, Math.min(H - m - S, Y));
+      }
       const m = matrix(current.data, ecl || (fmt === 'card' ? 'L' : 'M')), q = tile ? 3 : 0, tot = m.n + q * 2, cell = S / tot;
       if (tile) { fill('#ffffff'); roundRect(x, X, Y, S, S, radius ?? 26); x.fill(); }
       fill(ratio(d.ink, '#ffffff') >= 7 ? d.ink : '#111113');

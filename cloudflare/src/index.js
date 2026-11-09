@@ -190,7 +190,7 @@ async function design(req, env) {
 PŘÁNÍ ZÁKAZNÍKA (ZÁVAZNÉ, splň ho doslova a celé): ${brief || "(nic neuvedl, odvoď styl z oboru a údajů)"}
 ${ban.length ? `ZAKÁZANÁ SLOVA – nesmí se objevit nikde v textech (headline, tagline): ${ban.join(", ")}.` : ""}
 Pravidla:
-- Barvy z přání použij přesně (pozadí → bg, text → ink, detaily → accent). Velikost jména/údajů: nameScale 0.6–1.4, textScale 0.7–1.4. Styl, písmo a velká písmena dodrž.
+- Barvy z přání použij přesně (pozadí → bg, text → ink, detaily → accent). Velikost jména/údajů: nameScale 0.6–1.8, textScale 0.7–1.8. Styl, písmo a velká písmena dodrž.
 - Když zákazník chce motiv, obrázek, vzor nebo náladu (např. rozbité sklo, vlny, hory, květiny, mramor, neon), NAKRESLI ho jako SVG grafiku pozadí. Když motiv nechce, nakresli jemný abstraktní prvek, který sedí k oboru, nebo SVG vynech.
 - SVG: viewBox="${VB}", celé pozadí včetně podkladové barvy bg, jen vektorové tvary (path, polygon, line, circle, rect, linearGradient, radialGradient, filter s feTurbulence/feGaussianBlur). Žádný text, žádné obrázky, žádné externí odkazy. Do 7 kB.
 - ${zone}
