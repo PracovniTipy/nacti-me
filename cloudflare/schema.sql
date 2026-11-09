@@ -58,3 +58,18 @@ CREATE TABLE IF NOT EXISTS usage (
   n INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (kind, ip, day)
 );
+
+-- Promokódy na Pro zdarma (months 0 = navždy)
+CREATE TABLE IF NOT EXISTS promos (
+  code TEXT PRIMARY KEY,
+  months INTEGER NOT NULL,
+  uses_left INTEGER NOT NULL,
+  uses_total INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS promo_uses (
+  code TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (code, account_id)
+);

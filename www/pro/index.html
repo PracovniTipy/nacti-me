@@ -190,6 +190,16 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .empty { text-align: center; padding: 36px 16px; color: var(--muted); display: grid; gap: 14px; justify-items: center; }
 .empty b { color: var(--ink); font-size: 20px; letter-spacing: -0.02em; }
 .dl-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.promo { display: flex; gap: 8px; }
+.promo input { flex: 1; min-width: 0; padding: 13px 18px; border-radius: 999px; border: 1px dashed var(--line); background: transparent; color: var(--ink); font: 600 15px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.promo input::placeholder { text-transform: none; letter-spacing: 0; font-family: var(--sans); font-weight: 400; color: var(--muted); }
+.promo input:focus { outline: none; border-style: solid; border-color: var(--acc); }
+.pcodes { display: grid; gap: 6px; max-height: 240px; overflow: auto; text-align: left; width: 100%; }
+.pcodes div { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel2); font-size: 13px; }
+.pcodes b { font-family: var(--mono); letter-spacing: .06em; }
+.pnew { font: 700 26px/1.1 var(--mono); letter-spacing: .08em; padding: 16px 18px; border-radius: 16px; background: linear-gradient(100deg, rgba(168,139,255,.18), rgba(255,106,168,.18)); border: 1px solid var(--line); cursor: copy; }
+.prow { display: flex; gap: 8px; width: 100%; }
+.prow select, .prow input { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); color: var(--ink); font: inherit; }
 .danger { color: var(--down) !important; }
 </style>
 
@@ -224,6 +234,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       </ul>
       <div class="gform"><button class="btn" type="button" id="payBtn">Předplatit Pro</button><button class="btn ghost" type="button" id="logout1" hidden>Odhlásit</button></div>
       <div class="gmsg" id="payMsg" role="status"></div>
+      <form class="promo" id="promoForm" novalidate>
+        <input id="promoIn" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Máte promokód?" aria-label="Promokód" maxlength="40">
+        <button class="btn ghost" type="submit" id="promoBtn">Použít</button>
+      </form>
       <span class="fine">Platba proběhne bezpečně přes Stripe. Žádné heslo: po zaplacení jste rovnou přihlášení.</span>
       <span class="fine"><b>Pro už máte?</b> Na zařízení, kde jste přihlášení, klikněte na <b>Přidat zařízení</b> a naskenujte kód telefonem.</span>
     </div>
@@ -632,6 +646,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     show('dash');
     $('topRight').innerHTML = '<button class="btn ghost" type="button" id="deviceBtn">Přidat zařízení</button><button class="btn ghost" type="button" id="portalBtn">Předplatné</button><button class="btn ghost" type="button" id="logout2">Odhlásit</button><a class="btn" id="newCode2" href="#">Nový kód</a>';
     $('deviceBtn').addEventListener('click', addDevice);
+    if (st.owner) { const pb = document.createElement('button'); pb.className = 'btn ghost'; pb.type = 'button'; pb.textContent = 'Promokódy'; pb.addEventListener('click', promosBox); $('topRight').prepend(pb); }
+    if (!st.stripe) $('portalBtn').remove();
     $('portalBtn').addEventListener('click', async () => { try { const r = await api('/pro/portal', 'POST'); location.href = r.url; } catch (e) { toast('Správu předplatného teď nejde otevřít'); } });
     $('logout2').addEventListener('click', logout);
     $('newCode2').addEventListener('click', (e) => { e.preventDefault(); openDrawer(null); });
@@ -670,10 +686,66 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     try { await api('/pro/logout', 'POST'); } catch (e) {}
     tok.set(null); try { localStorage.removeItem('nacti_pro'); } catch (e) {} location.href = location.pathname;
   }
+  let promoDiscount = '';
+  $('promoForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = $('promoIn').value.trim().toUpperCase(), m = $('payMsg');
+    if (!code) { $('promoIn').focus(); return; }
+    if (!live) { m.className = 'gmsg'; m.textContent = 'Promokódy fungují na nacti.me/pro.'; return; }
+    $('promoBtn').disabled = true; m.className = 'gmsg'; m.textContent = 'Ověřuji kód…';
+    try {
+      const r = await api('/pro/promo', 'POST', { code });
+      if (r.type === 'discount') {
+        promoDiscount = code; $('payBtn').textContent = 'Předplatit Pro se slevou';
+        m.textContent = `Kód ${code} platí. Sleva se odečte při platbě.`;
+      } else {
+        if (r.token) tok.set(r.token);
+        m.textContent = r.forever ? 'Hotovo. Máte Načti.me Pro navždy.' : `Hotovo. Načti.me Pro máte do ${new Date(r.until).toLocaleDateString('cs-CZ')}.`;
+        setTimeout(() => { login('Vítejte<br><em>v Pro.</em>', 'Chvilku strpení.'); afterLogin(); }, 900);
+      }
+    } catch (err) {
+      m.className = 'gmsg err';
+      m.textContent = { invalid: 'Takový kód neexistuje. Zkontrolujte ho prosím.', used_up: 'Tenhle kód už byl vyčerpaný.', already_used: 'Tenhle kód už jste použili.', rate_limited: 'Moc pokusů. Zkuste to prosím později.' }[err.code] || 'Kód teď nejde ověřit. Zkuste to za chvíli.';
+    }
+    $('promoBtn').disabled = false;
+  });
+
+  // ---- Promokódy (jen majitel) ----
+  async function promosBox() {
+    let box = document.getElementById('promoBox');
+    if (!box) {
+      box = document.createElement('div'); box.id = 'promoBox'; box.className = 'gate'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'Promokódy');
+      box.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(7,6,10,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:grid;place-items:center;padding:20px;overflow:auto';
+      document.body.append(box); box.addEventListener('click', (e) => { if (e.target === box) box.remove(); });
+    }
+    box.innerHTML = `<div class="gcard" style="justify-items:start"><span class="kick">Jen pro vás</span><h1 style="font-size:40px">Promokódy<br><em>na Pro.</em></h1>
+      <div class="prow"><select id="pMonths" aria-label="Na jak dlouho"><option value="1">Pro na 1 měsíc</option><option value="3">Pro na 3 měsíce</option><option value="6">Pro na 6 měsíců</option><option value="12">Pro na 1 rok</option><option value="0">Pro navždy</option></select>
+      <input id="pUses" type="number" min="1" max="1000" value="1" aria-label="Kolikrát jde použít" title="Kolikrát jde kód použít"></div>
+      <div class="prow"><input id="pPrefix" maxlength="12" placeholder="Začátek kódu, např. LETO" aria-label="Začátek kódu"><button class="btn" type="button" id="pMake">Vytvořit kód</button></div>
+      <div id="pOut"></div><div class="pcodes" id="pList"></div>
+      <span class="fine">Slevové kódy na placení (např. −50 %) vytvoříte ve Stripe: Product catalog → Coupons. Zákazník je zadá do stejného pole.</span>
+      <button class="btn ghost" type="button" id="pClose">Hotovo</button></div>`;
+    $('pClose').addEventListener('click', () => box.remove());
+    const list = async () => {
+      try { const r = await api('/pro/promos'); $('pList').innerHTML = r.promos.map((p) => `<div><b>${esc(p.code)}</b><span>${p.months ? p.months + ' měs.' : 'navždy'} · ${p.uses_total - p.uses_left}/${p.uses_total} použito</span></div>`).join(''); } catch (e) {}
+    };
+    $('pMake').addEventListener('click', async () => {
+      $('pMake').disabled = true;
+      try {
+        const r = await api('/pro/promos', 'POST', { months: +$('pMonths').value, uses: +$('pUses').value, prefix: $('pPrefix').value });
+        $('pOut').innerHTML = `<div class="pnew" id="pNew" title="Kliknutím zkopírujete">${esc(r.code)}</div>`;
+        $('pNew').addEventListener('click', () => { navigator.clipboard && navigator.clipboard.writeText(r.code); toast('Kód zkopírován'); });
+        list();
+      } catch (e) { toast('Kód se nepodařilo vytvořit'); }
+      $('pMake').disabled = false;
+    });
+    list();
+  }
+
   async function startLive() {
     $('payBtn').addEventListener('click', async () => {
       $('payBtn').disabled = true; $('payMsg').className = 'gmsg'; $('payMsg').textContent = 'Otevírám bezpečnou platbu…';
-      try { const r = await api('/pro/checkout', 'POST'); location.href = r.url; }
+      try { const r = await api('/pro/checkout', 'POST', promoDiscount ? { promo: promoDiscount } : {}); location.href = r.url; }
       catch (e) { $('payBtn').disabled = false; $('payMsg').className = 'gmsg err'; $('payMsg').textContent = e.code === 'not_configured' ? 'Platby se právě spouštějí. Zkuste to prosím za chvíli.' : 'Platbu se nepodařilo otevřít. Zkuste to znovu.'; }
     });
     $('logout1').addEventListener('click', logout);

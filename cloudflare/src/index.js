@@ -59,7 +59,8 @@ async function account(req, env) {
   if (t.length < 20) return null;
   return env.DB.prepare("SELECT a.* FROM tokens t JOIN accounts a ON a.id = t.account_id WHERE t.hash = ?1").bind(await sha(t)).first();
 }
-const isPro = (a) => !!a && ["active", "trialing", "past_due"].includes(a.sub_status) && (!a.period_end || a.period_end > now() - 3 * DAY);
+const isPro = (a) => !!a && ((["active", "trialing", "past_due"].includes(a.sub_status) && (!a.period_end || a.period_end > now() - 3 * DAY)) || a.promo_until === -1 || (a.promo_until || 0) > now());
+const OWNER = "owner";
 async function newToken(env, accountId) {
   const t = rand(40);
   await env.DB.prepare("INSERT INTO tokens (hash, account_id, created_at) VALUES (?1, ?2, ?3)").bind(await sha(t), accountId, now()).run();
@@ -292,6 +293,7 @@ export default {
       // ---- Pro ----
       if (p === "/pro/checkout" && M === "POST") {
         const a = await account(req, env);
+        const pb = await req.json().catch(() => ({}));
         const params = {
           mode: "subscription", locale: "cs", allow_promotion_codes: "true",
           "line_items[0][price]": await priceId(env), "line_items[0][quantity]": 1,
@@ -299,6 +301,10 @@ export default {
         };
         if (a?.stripe_customer) params.customer = a.stripe_customer;
         if (a) params.client_reference_id = a.id;
+        if (/^[A-Za-z0-9_-]{2,40}$/.test(pb?.promo || "")) {
+          const pc = await stripe(env, "promotion_codes", { code: pb.promo, active: "true", limit: 1 }, "GET");
+          if (pc.data?.[0]) { delete params.allow_promotion_codes; params["discounts[0][promotion_code]"] = pc.data[0].id; }
+        }
         const s = await stripe(env, "checkout/sessions", params);
         return json(req, { url: s.url });
       }
@@ -323,6 +329,34 @@ export default {
         a = await refresh(env, a);
         return json(req, { token: await newToken(env, a.id), pro: isPro(a), email: a.email });
       }
+      if (p === "/pro/promo" && M === "POST") {
+        const { code } = await req.json().catch(() => ({}));
+        const c = String(code || "").trim().toUpperCase();
+        if (!/^[A-Z0-9-]{4,40}$/.test(c)) return err(req, "bad_code", 400);
+        if (!(await hit(env, "promo", ip(req), 20))) return err(req, "rate_limited", 429);
+        const pr = await env.DB.prepare("SELECT * FROM promos WHERE code = ?1").bind(c).first();
+        if (!pr) {
+          // není to náš kód na Pro zdarma – zkusíme slevový kód ve Stripe
+          try {
+            const pc = await stripe(env, "promotion_codes", { code: c, active: "true", limit: 1 }, "GET");
+            if (pc.data?.[0]) return json(req, { type: "discount", code: c });
+          } catch {}
+          return err(req, "invalid", 404);
+        }
+        if (pr.uses_left <= 0) return err(req, "used_up", 410);
+        let a = await account(req, env), token = null;
+        if (!a) { a = { id: rand(16) }; await env.DB.prepare("INSERT INTO accounts (id, created_at) VALUES (?1, ?2)").bind(a.id, now()).run(); token = await newToken(env, a.id); }
+        const used = await env.DB.prepare("SELECT 1 FROM promo_uses WHERE code = ?1 AND account_id = ?2").bind(c, a.id).first();
+        if (used) return err(req, "already_used", 409);
+        const base = Math.max(now(), a.promo_until > 0 ? a.promo_until : 0);
+        const until = pr.months === 0 || a.promo_until === -1 ? -1 : base + pr.months * 30 * DAY;
+        await env.DB.batch([
+          env.DB.prepare("UPDATE accounts SET promo_until = ?1 WHERE id = ?2").bind(until, a.id),
+          env.DB.prepare("UPDATE promos SET uses_left = uses_left - 1 WHERE code = ?1").bind(c),
+          env.DB.prepare("INSERT INTO promo_uses (code, account_id, at) VALUES (?1, ?2, ?3)").bind(c, a.id, now()),
+        ]);
+        return json(req, { type: "pro", token, until: until === -1 ? null : new Date(until).toISOString(), forever: until === -1 });
+      }
       if (p === "/pro/redeem" && M === "POST") {
         const { code } = await req.json().catch(() => ({}));
         if (!/^[A-Za-z0-9]{10}$/.test(code || "")) return err(req, "bad_code", 400);
@@ -337,7 +371,20 @@ export default {
 
       if (p === "/pro/status" && M === "GET") {
         let b = a; try { b = await refresh(env, a); } catch (e) { if (e.message === "not_configured") return err(req, "not_configured", 503); }
-        return json(req, { pro: isPro(b), status: b.sub_status, periodEnd: b.period_end ? new Date(b.period_end).toISOString() : null, email: b.email, priceCzk: PRICE_CZK });
+        return json(req, { pro: isPro(b), status: b.sub_status, periodEnd: b.period_end ? new Date(b.period_end).toISOString() : null, email: b.email, priceCzk: PRICE_CZK,
+          owner: b.id === OWNER, promoUntil: b.promo_until === -1 ? "forever" : b.promo_until ? new Date(b.promo_until).toISOString() : null, stripe: !!b.stripe_customer });
+      }
+      if (p === "/pro/promos" && a.id === OWNER) {
+        if (M === "POST") {
+          const b = await req.json().catch(() => ({}));
+          const months = [0, 1, 3, 6, 12].includes(+b.months) ? +b.months : 1, uses = Math.min(1000, Math.max(1, +b.uses || 1));
+          const word = (clip(b.prefix, 12).toUpperCase().replace(/[^A-Z0-9]/g, "") || "NACTI");
+          const code = `${word}-${rand(6, "ABCDEFGHJKLMNPQRSTUVWXYZ23456789")}`;
+          await env.DB.prepare("INSERT INTO promos (code, months, uses_left, uses_total, created_at) VALUES (?1, ?2, ?3, ?3, ?4)").bind(code, months, uses, now()).run();
+          return json(req, { code, months, uses }, 201);
+        }
+        const { results } = await env.DB.prepare("SELECT code, months, uses_left, uses_total, created_at FROM promos ORDER BY created_at DESC LIMIT 100").all();
+        return json(req, { promos: results });
       }
       if (p === "/pro/portal" && M === "POST") {
         if (!a.stripe_customer) return err(req, "no_customer", 400);
