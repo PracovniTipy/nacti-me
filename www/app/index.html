@@ -150,6 +150,10 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .gal:hover canvas { transform: translateY(-2px); }
 .gal[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--g1); }
 .gal span { position: absolute; left: 5px; bottom: 5px; font: 500 10px/1 var(--mono); padding: 3px 5px; border-radius: 4px; background: rgba(0,0,0,.55); color: #fff; }
+.imgrow { display: flex; gap: 8px; }
+.imgbtn { flex: 1; display: grid !important; place-items: center; padding: 14px; border-radius: 14px; border: 1px dashed var(--line); cursor: pointer; font-weight: 600; color: var(--fg) !important; }
+.imgbtn:hover { border-color: var(--fg); }
+.imgdel { border: 1px solid var(--line); background: none; color: var(--fg); border-radius: 14px; padding: 0 16px; cursor: pointer; font: inherit; }
 .out { display: grid; gap: 12px; }
 #pNote.warn { color: #ffb35a; font-weight: 600; }
 .out .pv { display: grid; place-items: center; background: var(--field); border-radius: 16px; box-shadow: inset 0 0 0 1px var(--line); padding: 18px; }
@@ -287,6 +291,14 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
           <label for="tSize">Velikost údajů <output id="tSizeV">100 %</output><input type="range" id="tSize" min="70" max="140" step="5" value="100"></label>
         </div>
         <label class="check" for="tUpper"><input type="checkbox" id="tUpper"> Nadpis velkými písmeny</label>
+        <div class="tune-row">
+          <label for="tMotif">Motiv pozadí<select id="tMotif"></select></label>
+          <label for="tImgMode">Vlastní obrázek<select id="tImgMode"><option value="logo">Jako logo</option><option value="bg">Jako pozadí</option></select></label>
+        </div>
+        <div class="imgrow">
+          <label class="imgbtn" for="tImg"><input type="file" id="tImg" accept="image/*" hidden><span id="tImgLabel">Nahrát logo nebo obrázek</span></label>
+          <button type="button" class="imgdel" id="tImgDel" hidden>Odebrat</button>
+        </div>
       </div>
       <p class="note" id="pNote"></p>
     </div>
@@ -720,6 +732,8 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
       tagline: typeof d.tagline === 'string' ? d.tagline.trim().replace(/\s+/g, ' ').slice(0, 44) : '',
       nameScale: Math.min(1.4, Math.max(0.6, +d.nameScale || 1)), textScale: Math.min(1.4, Math.max(0.7, +d.textScale || 1)),
       art: typeof d.art === 'string' && /^<svg[\s>]/i.test(d.art) ? d.art : '', artOpacity: Math.min(1, Math.max(0.25, +d.artOpacity || 1)),
+      motif: MOTIFS[d.motif] || d.motif === 'none' ? d.motif : '', motifOpacity: Math.min(1, Math.max(0.3, +d.motifOpacity || 1)),
+      img: typeof d.img === 'string' && d.img.startsWith('data:image/') ? d.img : '', imgMode: d.imgMode === 'bg' ? 'bg' : 'logo',
     };
     if (!d.inkLocked && ratio(o.ink, o.bg) < 4.5) o.ink = lum(o.bg) > 0.3 ? '#111113' : '#f6f5f1';
     return adaptDesign(o);
@@ -745,6 +759,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
   function parseBrief(raw) {
     const t = ' ' + (raw || '').toLowerCase() + ' ', o = {};
     if (!t.trim()) return o;
+    const mo = findMotif(raw); if (mo) o.motif = mo;
     // barvy s určením místa: „pozadí modré“, „modré pozadí“, „text bílý“, „zlaté detaily“
     const parts = t.split(/[,;.\n]| a | s | se /);
     const free = [];
@@ -857,13 +872,11 @@ Písma pro nadpis: ${Object.keys(DISPLAY).join(', ')}. Písma pro údaje: ${Obje
 Barvy: když zákazník nic neurčí, zvol paletu jako od designového studia. Text (ink) musí být na pozadí (bg) dobře čitelný.
 ${mode === 'card' ? 'headline = jméno osoby beze změny. tagline = krátký slogan česky do 36 znaků podle oboru, nebo prázdný.' : 'headline = krátká, výstižná česká výzva do 28 znaků, co má člověk udělat (např. „Připojte se k Wi-Fi“). tagline = doplňující věta česky do 40 znaků, nebo prázdný.'}
 ${forbiddenWords(brief).length ? 'ZAKÁZANÁ SLOVA – nesmí být v žádném textu: ' + forbiddenWords(brief).join(', ') + '.' : ''}
-Když zákazník chce motiv, obrázek, vzor nebo náladu (rozbité sklo, vlny, hory, květiny, mramor…), NAKRESLI ho jako SVG pozadí: viewBox="0 0 ${FORMATS[format].W} ${FORMATS[format].H}", včetně podkladové barvy bg, jen vektorové tvary a přechody, žádný text ani obrázky, do 7 kB. Výrazné prvky dej k okrajům, v místě textu drž motiv jemný. Bez motivu můžeš SVG vynechat.
+Motiv pozadí (nakreslí ho aplikace): vyber jeden klíč podle oboru a přání, nebo "none": ${MOTIF_ORDER.map((k) => k + ' (' + MOTIFS[k].label + ')').join(', ')}.
 Nevymýšlej žádné kontaktní ani platební údaje.
-Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
-{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"artOpacity":1,"headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}
-<svg …>…</svg>`;
-    const r = await sample(prompt, { modelTier: 'complex', cache: false });
-    return splitAi(r.text || '');
+Odpověz POUZE JSON objektem:
+{"layout":"…","bg":"#rrggbb","ink":"#rrggbb","accent":"#rrggbb","accent2":"#rrggbb","display":"…","text":"…","upper":true|false,"nameScale":1,"textScale":1,"motif":"…","headline":"…","tagline":"…","why":"jedna věta česky, co jste podle přání udělal"}`;
+    return sample.json(prompt, { modelTier: 'quick', cache: false });
   }
 
   async function serverDesign(brief) {
@@ -873,7 +886,7 @@ Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
     const r = await fetch(`${API}/design`, {
       method: 'POST',
       headers: Object.assign({ 'content-type': 'application/json' }, authH()),
-      body: JSON.stringify({ format, brief, info, avoid: brief ? [] : used[format].slice(-3), current: design ? { layout: design.layout, bg: design.bg, ink: design.ink, accent: design.accent, display: design.display, text: design.text, upper: design.upper, nameScale: design.nameScale, textScale: design.textScale } : null }),
+      body: JSON.stringify({ format, brief, info, motifs: MOTIF_ORDER.map((k) => [k, MOTIFS[k].label]), avoid: brief ? [] : used[format].slice(-3), current: design ? { layout: design.layout, bg: design.bg, ink: design.ink, accent: design.accent, display: design.display, text: design.text, upper: design.upper, nameScale: design.nameScale, textScale: design.textScale } : null }),
     });
     if (!r.ok) throw { code: r.status === 429 ? 'rate_limited' : 'unavailable' };
     return r.json();
@@ -885,7 +898,7 @@ Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
     const brief = $('brief').value.trim(), patch = parseBrief(brief);
     const modify = kind !== 'new' && !!design && !!brief;
     busy = true; $('aiBtn').disabled = true; $('againBtn').disabled = true; $('aiBtn').classList.add('busy');
-    $('aiLabel').textContent = hasAi() ? (brief ? 'AI kreslí podle přání… (do 30 s)' : 'AI navrhuje na míru…') : (modify ? 'Upravuji podle přání…' : 'Navrhuji…');
+    $('aiLabel').textContent = hasAi() ? 'AI navrhuje podle přání…' : (modify ? 'Upravuji podle přání…' : 'Navrhuji…');
     if (used[format].length >= FORMATS[format].layouts.length) used[format].length = 0;
     let d = null, note = '';
     if (hasAi()) {
@@ -903,6 +916,8 @@ Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
     if (mode === 'card') d.headline = current.headline;
     if (!modify && design && !patch.nameScale && !d.nameScale) d.nameScale = design.nameScale;
     if (!modify && design && !patch.textScale && !d.textScale) d.textScale = design.textScale;
+    if (!d.motif) d.motif = mode === 'card' ? findMotif([values.card.title, values.card.org, values.card.web].join(' ')) : '';
+    if (design && design.img) { d.img = design.img; d.imgMode = design.imgMode; }
     const ban = forbiddenWords(brief);
     if (ban.length && hasWord(d.tagline, ban)) d.tagline = '';
     if (ban.length && mode !== 'card' && hasWord(d.headline, ban)) d.headline = '';
@@ -947,7 +962,7 @@ Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
       g.innerHTML = CARD_SET.map((c) => `<button type="button" class="gal" data-n="${c.n}" aria-pressed="false" title="${c.title}" aria-label="Návrh ${c.n}: ${c.title}"><canvas width="240" height="155"></canvas><span>${c.n}</span></button>`).join('');
       g.querySelectorAll('.gal').forEach((b) => b.addEventListener('click', () => {
         const c = CARD_SET[+b.dataset.n - 1];
-        design = cleanDesign({ ...c, headline: current.headline, nameScale: design ? design.nameScale : 1, textScale: design ? design.textScale : 1 });
+        design = cleanDesign({ ...c, headline: current.headline, nameScale: design ? design.nameScale : 1, textScale: design ? design.textScale : 1, motif: design ? design.motif : '', img: design ? design.img : '', imgMode: design ? design.imgMode : 'logo' });
         design.n = c.n; syncTune(); renderPrint();
         $('pNote').textContent = `Návrh ${c.n}: ${c.title}. Doladíte níže, nebo napište přání nahoru.`;
       }));
@@ -973,6 +988,10 @@ Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
     $('tName').value = Math.round(d.nameScale * 100); $('tSize').value = Math.round(d.textScale * 100);
     $('tNameV').textContent = $('tName').value + ' %'; $('tSizeV').textContent = $('tSize').value + ' %';
     $('tHeadWrap').hidden = mode === 'card';
+    if (!$('tMotif').options.length) $('tMotif').innerHTML = '<option value="none">Bez motivu</option>' + MOTIF_ORDER.map((k) => `<option value="${k}">${MOTIFS[k].label}</option>`).join('');
+    $('tMotif').value = d.motif && d.motif !== 'none' ? d.motif : 'none';
+    $('tImgMode').value = d.imgMode || 'logo'; $('tImgMode').disabled = !d.img;
+    $('tImgDel').hidden = !d.img; $('tImgLabel').textContent = d.img ? 'Vyměnit obrázek' : 'Nahrát logo nebo obrázek';
     if (document.activeElement !== $('tHead')) $('tHead').value = d.headline || '';
     renderGallery();
   }
@@ -985,6 +1004,22 @@ Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
   $('tSize').addEventListener('input', (e) => tweak({ textScale: e.target.value / 100 }));
   $('tUpper').addEventListener('change', (e) => tweak({ upper: e.target.checked }));
   $('tHead').addEventListener('input', (e) => tweak({ headline: e.target.value }));
+  $('tMotif').addEventListener('change', (e) => tweak({ motif: e.target.value, art: '' }));
+  $('tImgMode').addEventListener('change', (e) => tweak({ imgMode: e.target.value }));
+  $('tImgDel').addEventListener('click', () => tweak({ img: '' }));
+  $('tImg').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!f || !/^image\//.test(f.type)) return;
+    const im = await loadImg(URL.createObjectURL(f)); if (!im) { $('pNote').textContent = 'Tenhle obrázek se nepodařilo načíst.'; return; }
+    // zmenšíme na rozumnou velikost pro tisk (max 2000 px), průhlednost zachováme
+    const k = Math.min(1, 2000 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas');
+    c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    const data = c.toDataURL(/png|svg|webp|gif/.test(f.type) ? 'image/png' : 'image/jpeg', 0.9);
+    await loadImg(data);
+    const big = im.naturalWidth > 900 && im.naturalHeight > 500 && !/png|svg/.test(f.type);
+    tweak({ img: data, imgMode: big ? 'bg' : 'logo' });
+    $('pNote').textContent = big ? 'Fotka je jako pozadí. Přepnout na logo můžete výše.' : 'Obrázek je jako logo vpravo nahoře. Přepnout na pozadí můžete výše.';
+  });
 
   $('dlPrint').addEventListener('click', () => {
     if (!printCanvas) return;
@@ -1042,7 +1077,300 @@ Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
     else { v.className = 'verdict warn'; v.textContent = `● QR na tisku ${qrCm} cm je příliš hustý. Zkraťte obsah, nebo zvolte větší formát.`; }
   }
 
+  // ================= Motivy podle oboru (kreslí aplikace sama, bez drahé AI) =================
+  // Každý motiv se kreslí do pozadí vizitky v barvách návrhu a jemně mizí směrem k textu.
+  const MOTIFS = {
+    glass:    { label: 'Rozbité sklo', words: ['sklen', 'sklo', 'skla', 'okn', 'zrcad', 'rozbit'] },
+    gears:    { label: 'Ozubená kola', words: ['mechan', 'autoserv', 'servis', 'strojn', 'zámeč', 'zamec', 'oprav', 'motor', 'technik'] },
+    bricks:   { label: 'Cihlová zeď', words: ['zedn', 'zedník', 'cihl', 'stavb', 'staveb', 'zdění', 'zdeni', 'omít', 'omit', 'fasád', 'fasad', 'obklad', 'dlažd', 'dlazd'] },
+    drips:    { label: 'Poleva a posyp', words: ['cukr', 'dort', 'zákusk', 'zakusk', 'sladk', 'zmrzl', 'cupcake', 'čokol', 'cokol', 'perník', 'pernik'] },
+    wheat:    { label: 'Klasy', words: ['pekař', 'pekar', 'pekárn', 'pekarn', 'chléb', 'chleb', 'mlyn', 'farm', 'zeměděl', 'zemedel'] },
+    wood:     { label: 'Dřevo', words: ['truhl', 'tesař', 'tesar', 'dřev', 'drev', 'nábyt', 'nabyt', 'podlah', 'kuchyňsk', 'stolař', 'stolar'] },
+    circuit:  { label: 'Obvody a blesk', words: ['elektr', 'ajťák', 'ajtak', 'program', 'softw', 'počítač', 'pocitac', 'vývoj', 'vyvoj', 'web', 'tech', 'chytr', 'solár', 'solar'] },
+    pipes:    { label: 'Trubky a kapky', words: ['instal', 'topen', 'topenář', 'plyn', 'kanaliz', 'vodoinst', 'kotl', 'klimat'] },
+    leaves:   { label: 'Listy', words: ['zahrad', 'květ', 'kvet', 'florist', 'bio', 'eko', 'les', 'rostl', 'bylin', 'vinař', 'vinar', 'čaj', 'caj'] },
+    paint:    { label: 'Tahy štětcem', words: ['malíř', 'malir', 'natěr', 'nater', 'grafi', 'umělec', 'umelec', 'výtvar', 'vytvar', 'ateliér', 'atelier', 'tetov', 'design'] },
+    hair:     { label: 'Vlny vlasů', words: ['kadeř', 'kader', 'holič', 'holic', 'barber', 'kosmet', 'vlas', 'salon', 'beauty', 'nehty', 'manik', 'masáž', 'masaz', 'vizáž', 'vizaz', 'líč', 'lic'] },
+    aperture: { label: 'Clona fotoaparátu', words: ['foto', 'kamer', 'film', 'video', 'kino', 'objektiv'] },
+    coffee:   { label: 'Káva a pára', words: ['kav', 'café', 'cafe', 'kafe', 'restaur', 'bistr', 'kuchař', 'kuchar', 'gastro', 'catering', 'baristа', 'barista', 'jídl', 'jidl'] },
+    waves:    { label: 'Vlny', words: ['vlny', 'moř', 'more', 'bazén', 'bazen', 'plav', 'surf', 'lázn', 'lazn', 'jachta', 'rybář', 'rybar', 'voda'] },
+    mountains:{ label: 'Hory', words: ['hory', 'hor ', 'cestov', 'turist', 'outdoor', 'příroda', 'priroda', 'lyž', 'lyz', 'horol', 'kemp'] },
+    tread:    { label: 'Dezén pneumatiky', words: ['pneu', 'autoškol', 'autoskol', 'doprav', 'taxi', 'kamion', 'odtah', 'auto', 'moto', 'řidič', 'ridic', 'kurýr', 'kuryr', 'stěhov', 'stehov'] },
+    houses:   { label: 'Střechy domů', words: ['realit', 'dům', 'dum ', 'domy', 'byt', 'architekt', 'interiér', 'interier', 'pokrýv', 'pokryv', 'střech', 'strech', 'klempíř', 'klempir'] },
+    bubbles:  { label: 'Bublinky', words: ['úklid', 'uklid', 'čist', 'cist', 'prádel', 'pradel', 'myčk', 'mycka', 'mýdl', 'mydl', 'pivo', 'pivovar', 'šampa', 'sampa'] },
+    sound:    { label: 'Zvukové vlny', words: ['hudb', 'muzik', 'dj', 'kapel', 'zvuk', 'zpěv', 'zpev', 'podcast', 'rádio', 'radio', 'party', 'akce'] },
+    pulse:    { label: 'Tep srdce', words: ['lékař', 'lekar', 'zub', 'fyzio', 'zdrav', 'ordinac', 'sestr', 'terap', 'veterin', 'lékárn', 'lekarn', 'psycho', 'klinik'] },
+    stripes:  { label: 'Dynamika', words: ['fitnes', 'trenér', 'trener', 'sport', 'posil', 'běh', 'beh', 'cyklo', 'box', 'jóga', 'joga', 'tanec', 'tane'] },
+    lines:    { label: 'Jemné linie', words: ['právn', 'pravn', 'advok', 'účet', 'ucet', 'finan', 'pojiš', 'pojis', 'daň', 'dan', 'konzult', 'notář', 'notar', 'poraden', 'banka'] },
+  };
+  const MOTIF_ORDER = Object.keys(MOTIFS);
+  function findMotif(text) {
+    const t = ' ' + (text || '').toLowerCase() + ' ';
+    if (/bez motivu|bez obrázku|bez obrazku|čisté|ciste|minimalist/.test(t)) return 'none';
+    for (const k of MOTIF_ORDER) if (MOTIFS[k].words.some((w) => t.includes(w))) return k;
+    return '';
+  }
+
+  function drawMotif(x, key, W, H, d, fmt) {
+    if (!MOTIFS[key]) return;
+    // kreslíme do vlastní vrstvy, pak ji maskou necháme vyblednout u textu
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d'), u = Math.min(W, H) / 100;
+    let seed = 7; for (const ch of key) seed = (seed * 31 + ch.charCodeAt(0)) % 2147483647;
+    const R = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const A = d.accent, A2 = d.accent2 || d.accent, onBg = on(d.bg), soft = mix(d.bg, onBg, 0.22);
+    const line = (col, w, a) => { g.strokeStyle = col; g.lineWidth = w; g.globalAlpha = a ?? 1; g.lineCap = 'round'; g.lineJoin = 'round'; };
+    const dot = (X, Y, r, col, a) => { g.globalAlpha = a ?? 1; g.fillStyle = col; g.beginPath(); g.arc(X, Y, r, 0, Math.PI * 2); g.fill(); };
+    const card = fmt === 'card';
+    const fx = card ? 0.74 : 0.5, fy = card ? 0.32 : 0.82; // ohnisko motivu
+
+    switch (key) {
+      case 'glass': {
+        const cx = W * fx, cy = H * fy;
+        for (let i = 0; i < 26; i++) {
+          const a0 = (i / 26) * Math.PI * 2 + R() * 0.2, len = (0.6 + R() * 0.7) * Math.max(W, H) * 0.6;
+          line(i % 3 ? soft : A2, u * (0.15 + R() * 0.35), 0.9); g.beginPath(); g.moveTo(cx, cy);
+          for (let k = 1; k <= 5; k++) { const rr = len * k / 5, aa = a0 + (R() - 0.5) * 0.18; g.lineTo(cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr); }
+          g.stroke();
+        }
+        for (const ring of [4, 9, 16, 26, 38]) {
+          line(soft, u * 0.18, 0.7); g.beginPath();
+          for (let k = 0; k <= 16; k++) { const aa = k / 16 * Math.PI * 2, rr = ring * u * (0.8 + R() * 0.45); k ? g.lineTo(cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr) : g.moveTo(cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr); }
+          g.stroke();
+        }
+        for (let i = 0; i < 9; i++) { // střepy
+          const aa = R() * Math.PI * 2, rr = (6 + R() * 22) * u, X = cx + Math.cos(aa) * rr, Y = cy + Math.sin(aa) * rr, s = (1.5 + R() * 3) * u;
+          g.globalAlpha = 0.18 + R() * 0.2; g.fillStyle = i % 2 ? A2 : onBg; g.beginPath(); g.moveTo(X, Y - s); g.lineTo(X + s * 0.8, Y + s * 0.6); g.lineTo(X - s * 0.6, Y + s * 0.4); g.closePath(); g.fill();
+        }
+        dot(cx, cy, u * 0.8, onBg, 0.9);
+        break;
+      }
+      case 'gears': {
+        const gear = (cx, cy, r, teeth, col, a, rot) => {
+          g.save(); g.translate(cx, cy); g.rotate(rot); g.globalAlpha = a; g.fillStyle = col; g.beginPath();
+          const n = teeth * 2;
+          for (let i = 0; i <= n * 4; i++) {
+            const t = i / (n * 4) * Math.PI * 2, tooth = Math.floor(i / 4) % 2 === 0, rr = tooth ? r * 1.16 : r;
+            i ? g.lineTo(Math.cos(t) * rr, Math.sin(t) * rr) : g.moveTo(Math.cos(t) * rr, Math.sin(t) * rr);
+          }
+          g.closePath(); g.moveTo(r * 0.42, 0); g.arc(0, 0, r * 0.42, 0, Math.PI * 2, true); g.fill('evenodd'); g.restore();
+        };
+        gear(W * (card ? 0.86 : 0.78), H * (card ? 0.22 : 0.86), 22 * u, 12, A, 0.55, 0.1);
+        gear(W * (card ? 0.66 : 0.4), H * (card ? 0.0 : 0.98), 14 * u, 9, A2, 0.45, 0.3);
+        gear(W * (card ? 0.99 : 0.98), H * (card ? 0.62 : 0.62), 11 * u, 8, soft, 0.6, 0.2);
+        // klíč
+        g.save(); g.translate(W * (card ? 0.62 : 0.2), H * (card ? 0.75 : 0.9)); g.rotate(-0.7); g.globalAlpha = 0.35; g.fillStyle = onBg;
+        g.fillRect(-1.6 * u, -26 * u, 3.2 * u, 30 * u); g.beginPath(); g.arc(0, -28 * u, 5.5 * u, 0, Math.PI * 2); g.fill();
+        g.globalCompositeOperation = 'destination-out'; g.fillRect(-1.8 * u, -36 * u, 3.6 * u, 8 * u); g.restore();
+        break;
+      }
+      case 'bricks': {
+        const bw = 16 * u, bh = 6.4 * u, gap = u * 0.9;
+        for (let r = 0, y = 0; y < H; r++, y += bh + gap) for (let xx = -(r % 2) * bw / 2; xx < W; xx += bw + gap) {
+          g.globalAlpha = 0.25 + R() * 0.35; g.fillStyle = R() > 0.75 ? A2 : A; roundRect(g, xx, y, bw, bh, u * 0.6); g.fill();
+        }
+        break;
+      }
+      case 'drips': {
+        // poleva stékající z horního okraje
+        g.globalAlpha = 0.9; g.fillStyle = A2; g.beginPath(); g.moveTo(0, 0); g.lineTo(W, 0);
+        const n = card ? 9 : 7, seg = W / n; g.lineTo(W, 6 * u);
+        for (let i = n; i > 0; i--) {
+          const x0 = i * seg, x1 = (i - 1) * seg, len = (8 + R() * 18) * u, mid = (x0 + x1) / 2, w = seg * (0.18 + R() * 0.16);
+          g.bezierCurveTo(x0 - seg * 0.15, 6 * u, mid + w, 6 * u, mid + w, len); g.arc(mid, len, w, 0, Math.PI); g.bezierCurveTo(mid - w, 6 * u, x1 + seg * 0.15, 6 * u, x1, 6 * u);
+        }
+        g.closePath(); g.fill();
+        // posyp
+        const cols = [A, onBg, mix(A, '#ffffff', 0.4), mix(A2, '#000000', 0.25)];
+        for (let i = 0; i < 70; i++) {
+          g.save(); g.translate(W * (card ? 0.45 + R() * 0.55 : R()), H * (card ? 0.25 + R() * 0.75 : 0.55 + R() * 0.45)); g.rotate(R() * Math.PI);
+          g.globalAlpha = 0.75; g.fillStyle = cols[i % cols.length]; roundRect(g, -1.6 * u, -0.5 * u, 3.2 * u, 1 * u, 0.5 * u); g.fill(); g.restore();
+        }
+        break;
+      }
+      case 'wheat': {
+        const ear = (X, Y, ang, s) => {
+          g.save(); g.translate(X, Y); g.rotate(ang); line(A, u * 0.5 * s, 0.7); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -40 * u * s); g.stroke();
+          g.fillStyle = A2; g.globalAlpha = 0.75;
+          for (let k = 0; k < 8; k++) for (const side of [-1, 1]) { g.save(); g.translate(0, -(18 + k * 3.2) * u * s); g.rotate(side * 0.5); g.beginPath(); g.ellipse(side * 1.6 * u * s, 0, 1.4 * u * s, 3 * u * s, 0, 0, Math.PI * 2); g.fill(); g.restore(); }
+          g.restore();
+        };
+        for (let i = 0; i < 7; i++) ear(W * (card ? 0.62 + i * 0.06 : 0.12 + i * 0.12), H * 1.02, (R() - 0.5) * 0.5, 1 + R() * 0.5);
+        break;
+      }
+      case 'wood': {
+        for (let i = 0; i < 34; i++) {
+          const y0 = (i / 34) * H * 1.1; line(i % 4 ? soft : A, u * (0.2 + R() * 0.5), 0.55); g.beginPath();
+          for (let xx = 0; xx <= W; xx += W / 40) { const y = y0 + Math.sin(xx / W * 6 + i * 0.4) * 2.5 * u + Math.sin(xx / W * 17 + i) * u; xx ? g.lineTo(xx, y) : g.moveTo(xx, y); }
+          g.stroke();
+        }
+        for (let i = 0; i < 3; i++) { const X = W * (card ? 0.6 + R() * 0.35 : 0.2 + R() * 0.6), Y = H * R(); for (let k = 1; k < 6; k++) { line(A2, u * 0.3, 0.6); g.beginPath(); g.ellipse(X, Y, k * 2.2 * u, k * 0.9 * u, 0, 0, Math.PI * 2); g.stroke(); } }
+        break;
+      }
+      case 'circuit': {
+        for (let i = 0; i < 26; i++) {
+          let X = W * (card ? 0.5 + R() * 0.5 : R()), Y = H * (card ? R() : 0.55 + R() * 0.45);
+          line(i % 3 ? soft : A, u * 0.45, 0.8); g.beginPath(); g.moveTo(X, Y);
+          for (let k = 0; k < 3; k++) { if (k % 2) X += (R() - 0.3) * 24 * u; else Y += (R() - 0.5) * 24 * u; g.lineTo(X, Y); }
+          g.stroke(); dot(X, Y, u * 1.1, A2, 0.9);
+        }
+        // blesk
+        g.globalAlpha = 0.55; g.fillStyle = A2; const bx = W * (card ? 0.8 : 0.78), by = H * (card ? 0.1 : 0.62), s = u * (card ? 1.1 : 1.3);
+        g.beginPath(); g.moveTo(bx + 6 * s, by); g.lineTo(bx - 8 * s, by + 24 * s); g.lineTo(bx, by + 24 * s); g.lineTo(bx - 4 * s, by + 42 * s); g.lineTo(bx + 12 * s, by + 15 * s); g.lineTo(bx + 4 * s, by + 15 * s); g.closePath(); g.fill();
+        break;
+      }
+      case 'pipes': {
+        const pw = 4.5 * u;
+        const pipe = (pts, col) => { line(col, pw, 0.6); g.beginPath(); pts.forEach(([a, b], i) => (i ? g.lineTo(a * W, b * H) : g.moveTo(a * W, b * H))); g.stroke(); line(mix(col, '#ffffff', 0.35), pw * 0.25, 0.5); g.stroke(); };
+        if (card) { pipe([[0.55, -0.05], [0.55, 0.3], [0.8, 0.3], [0.8, 1.05]], A); pipe([[1.05, 0.12], [0.92, 0.12], [0.92, 0.55], [1.05, 0.55]], A2); }
+        else { pipe([[-0.05, 0.7], [0.3, 0.7], [0.3, 1.05]], A); pipe([[1.05, 0.8], [0.7, 0.8], [0.7, 1.05]], A2); }
+        for (let i = 0; i < 7; i++) { // kapky
+          const X = W * (card ? 0.6 + R() * 0.35 : 0.1 + R() * 0.8), Y = H * (card ? 0.4 + R() * 0.55 : 0.6 + R() * 0.35), s = (1.4 + R() * 1.6) * u;
+          g.globalAlpha = 0.55; g.fillStyle = A2; g.beginPath(); g.moveTo(X, Y - s * 2.2); g.bezierCurveTo(X + s * 1.3, Y - s * 0.4, X + s, Y + s, X, Y + s); g.bezierCurveTo(X - s, Y + s, X - s * 1.3, Y - s * 0.4, X, Y - s * 2.2); g.fill();
+        }
+        break;
+      }
+      case 'leaves': {
+        const leaf = (X, Y, ang, s, col) => {
+          g.save(); g.translate(X, Y); g.rotate(ang); g.globalAlpha = 0.55; g.fillStyle = col; g.beginPath(); g.moveTo(0, 0);
+          g.bezierCurveTo(6 * s, -6 * s, 6 * s, -16 * s, 0, -22 * s); g.bezierCurveTo(-6 * s, -16 * s, -6 * s, -6 * s, 0, 0); g.fill();
+          line(mix(col, d.bg, 0.5), u * 0.25, 0.6); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -20 * s); g.stroke(); g.restore();
+        };
+        for (let i = 0; i < 22; i++) leaf(W * (card ? 0.55 + R() * 0.5 : R()), H * (card ? R() * 1.1 : 0.6 + R() * 0.45), R() * Math.PI * 2, u * (0.6 + R() * 0.8), i % 3 ? A : A2);
+        break;
+      }
+      case 'paint': {
+        for (let i = 0; i < 5; i++) {
+          const y = H * (card ? 0.12 + i * 0.2 : 0.62 + i * 0.08), x0 = W * (card ? 0.5 + R() * 0.1 : -0.05), x1 = W * 1.05, th = (5 + R() * 6) * u;
+          g.globalAlpha = 0.5; g.fillStyle = i % 2 ? A2 : A; g.beginPath(); g.moveTo(x0, y);
+          for (let xx = x0; xx <= x1; xx += u * 2) g.lineTo(xx, y - th / 2 + (R() - 0.5) * u * 1.2);
+          for (let xx = x1; xx >= x0; xx -= u * 2) g.lineTo(xx, y + th / 2 + (R() - 0.5) * u * 1.2);
+          g.closePath(); g.fill();
+        }
+        for (let i = 0; i < 40; i++) dot(W * (card ? 0.5 + R() * 0.5 : R()), H * (card ? R() : 0.55 + R() * 0.45), u * (0.3 + R() * 1.4), i % 2 ? A : A2, 0.6);
+        break;
+      }
+      case 'hair': {
+        for (let i = 0; i < 18; i++) {
+          line(i % 4 ? soft : A, u * (0.3 + R() * 0.6), 0.75); g.beginPath();
+          const sx = W * (card ? 0.55 : 0) + i * u * 1.2, sy = -5 * u;
+          g.moveTo(sx, sy); g.bezierCurveTo(sx + 30 * u, H * 0.35, sx - 10 * u, H * 0.6, sx + 40 * u + i * u, H * 1.05); g.stroke();
+        }
+        break;
+      }
+      case 'aperture': {
+        const cx = W * (card ? 0.82 : 0.5), cy = H * (card ? 0.3 : 0.84), r = 26 * u;
+        for (let i = 0; i < 8; i++) {
+          const a = i / 8 * Math.PI * 2; g.globalAlpha = 0.18 + (i % 2) * 0.12; g.fillStyle = i % 2 ? A : A2; g.beginPath();
+          g.moveTo(cx + Math.cos(a) * r * 0.32, cy + Math.sin(a) * r * 0.32); g.lineTo(cx + Math.cos(a + 0.9) * r, cy + Math.sin(a + 0.9) * r); g.lineTo(cx + Math.cos(a + 1.7) * r, cy + Math.sin(a + 1.7) * r); g.closePath(); g.fill();
+        }
+        for (const k of [1, 1.18, 1.4]) { line(soft, u * 0.4, 0.7); g.beginPath(); g.arc(cx, cy, r * k, 0, Math.PI * 2); g.stroke(); }
+        break;
+      }
+      case 'coffee': {
+        const bean = (X, Y, a, s) => { g.save(); g.translate(X, Y); g.rotate(a); g.globalAlpha = 0.55; g.fillStyle = A; g.beginPath(); g.ellipse(0, 0, 3.2 * s, 4.6 * s, 0, 0, Math.PI * 2); g.fill(); line(d.bg, s * 0.6, 0.8); g.beginPath(); g.moveTo(0, -4 * s); g.bezierCurveTo(1.6 * s, -1 * s, -1.6 * s, 1 * s, 0, 4 * s); g.stroke(); g.restore(); };
+        for (let i = 0; i < 18; i++) bean(W * (card ? 0.58 + R() * 0.42 : R()), H * (card ? 0.35 + R() * 0.7 : 0.7 + R() * 0.3), R() * Math.PI, u * (0.8 + R() * 0.5));
+        for (let i = 0; i < 3; i++) { line(A2, u * 0.7, 0.5); g.beginPath(); const X = W * (card ? 0.72 + i * 0.07 : 0.4 + i * 0.1); g.moveTo(X, H * (card ? 0.3 : 0.62)); for (let k = 1; k <= 6; k++) g.lineTo(X + Math.sin(k) * 3 * u, H * (card ? 0.3 : 0.62) - k * 4 * u); g.stroke(); }
+        break;
+      }
+      case 'waves': {
+        for (let i = 0; i < 7; i++) {
+          g.globalAlpha = 0.16 + i * 0.06; g.fillStyle = i % 2 ? A : A2; const base = H * (0.45 + i * 0.09), amp = (2 + R() * 3) * u, f = 2 + R() * 2;
+          g.beginPath(); g.moveTo(0, H); for (let xx = 0; xx <= W; xx += W / 60) g.lineTo(xx, base + Math.sin(xx / W * f * Math.PI * 2 + i) * amp); g.lineTo(W, H); g.closePath(); g.fill();
+        }
+        break;
+      }
+      case 'mountains': {
+        for (let i = 0; i < 4; i++) {
+          g.globalAlpha = 0.2 + i * 0.14; g.fillStyle = i % 2 ? A2 : A; g.beginPath(); g.moveTo(0, H);
+          let xx = -W * 0.1; while (xx < W * 1.1) { const pk = H * (0.45 + i * 0.12 - R() * 0.12); g.lineTo(xx, H * (0.75 + i * 0.06)); g.lineTo(xx + W * 0.1, pk); xx += W * (0.16 + R() * 0.1); }
+          g.lineTo(W, H); g.closePath(); g.fill();
+        }
+        break;
+      }
+      case 'tread': {
+        const bandX = card ? W * 0.62 : 0, bandW = card ? W * 0.3 : W, step = 7 * u;
+        for (let y = -step; y < H + step; y += step) {
+          g.globalAlpha = 0.35; g.fillStyle = A;
+          if (card) { g.beginPath(); g.moveTo(bandX, y); g.lineTo(bandX + bandW / 2, y + step * 0.6); g.lineTo(bandX + bandW, y); g.lineTo(bandX + bandW, y + step * 0.35); g.lineTo(bandX + bandW / 2, y + step * 0.95); g.lineTo(bandX, y + step * 0.35); g.closePath(); g.fill(); }
+        }
+        if (!card) for (let xx = -step; xx < W + step; xx += step) { g.globalAlpha = 0.35; g.fillStyle = A; g.beginPath(); g.moveTo(xx, H * 0.8); g.lineTo(xx + step * 0.6, H * 0.88); g.lineTo(xx, H * 0.96); g.lineTo(xx + step * 0.35, H * 0.96); g.lineTo(xx + step * 0.95, H * 0.88); g.lineTo(xx + step * 0.35, H * 0.8); g.closePath(); g.fill(); }
+        line(A2, u * 0.6, 0.5); g.setLineDash([6 * u, 5 * u]); g.beginPath(); card ? (g.moveTo(W * 0.56, 0), g.lineTo(W * 0.56, H)) : (g.moveTo(0, H * 0.74), g.lineTo(W, H * 0.74)); g.stroke(); g.setLineDash([]);
+        break;
+      }
+      case 'houses': {
+        let xx = card ? W * 0.5 : -W * 0.05;
+        while (xx < W) { const w = (14 + R() * 12) * u, h = (10 + R() * 22) * u, base = H * (card ? 0.98 : 1);
+          line(R() > 0.6 ? A2 : A, u * 0.5, 0.7); g.beginPath(); g.moveTo(xx, base); g.lineTo(xx, base - h); g.lineTo(xx + w / 2, base - h - w * 0.45); g.lineTo(xx + w, base - h); g.lineTo(xx + w, base); g.stroke();
+          g.globalAlpha = 0.35; g.fillStyle = A2; g.fillRect(xx + w * 0.38, base - h * 0.45, w * 0.24, w * 0.24); xx += w + u * 2; }
+        break;
+      }
+      case 'bubbles': {
+        for (let i = 0; i < 26; i++) { const X = W * (card ? 0.55 + R() * 0.45 : R()), Y = H * (card ? R() : 0.5 + R() * 0.5), r = u * (1 + R() * 7);
+          line(i % 3 ? A : A2, u * 0.35, 0.65); g.beginPath(); g.arc(X, Y, r, 0, Math.PI * 2); g.stroke(); dot(X - r * 0.35, Y - r * 0.35, r * 0.18, onBg, 0.5); }
+        break;
+      }
+      case 'sound': {
+        const n = card ? 26 : 34, x0 = card ? W * 0.5 : 0, span = card ? W * 0.5 : W, mid = card ? H * 0.5 : H * 0.85;
+        for (let i = 0; i < n; i++) { const h = (4 + Math.abs(Math.sin(i * 0.7) * 18) + R() * 10) * u; g.globalAlpha = 0.45; g.fillStyle = i % 4 ? A : A2; roundRect(g, x0 + i * span / n, mid - h / 2, span / n * 0.55, h, u * 0.8); g.fill(); }
+        break;
+      }
+      case 'pulse': {
+        const y = H * (card ? 0.45 : 0.86);
+        line(A, u * 0.8, 0.8); g.beginPath(); g.moveTo(card ? W * 0.45 : 0, y);
+        let xx = card ? W * 0.45 : 0;
+        while (xx < W) { g.lineTo(xx + 8 * u, y); g.lineTo(xx + 10 * u, y - 4 * u); g.lineTo(xx + 12 * u, y + 2 * u); g.lineTo(xx + 14 * u, y - 16 * u); g.lineTo(xx + 16 * u, y + 9 * u); g.lineTo(xx + 18 * u, y); xx += 24 * u; }
+        g.stroke(); line(A2, u * 2.4, 0.15); g.stroke();
+        // křížek
+        g.globalAlpha = 0.3; g.fillStyle = A2; const cx = W * (card ? 0.86 : 0.85), cy = H * (card ? 0.16 : 0.68), s = 7 * u;
+        g.fillRect(cx - s / 3, cy - s, s * 2 / 3, s * 2); g.fillRect(cx - s, cy - s / 3, s * 2, s * 2 / 3);
+        break;
+      }
+      case 'stripes': {
+        for (let i = 0; i < 9; i++) { g.globalAlpha = 0.2 + (i % 3) * 0.12; g.fillStyle = i % 2 ? A : A2; const X = W * (card ? 0.5 : -0.1) + i * 7 * u, w = (1.5 + R() * 4) * u;
+          g.beginPath(); g.moveTo(X + 30 * u, 0); g.lineTo(X + 30 * u + w, 0); g.lineTo(X + w, H); g.lineTo(X, H); g.closePath(); g.fill(); }
+        break;
+      }
+      case 'lines': {
+        for (let i = 0; i < 9; i++) { line(i % 3 ? soft : A, u * 0.2, 0.8); g.beginPath(); g.arc(W * (card ? 1 : 0.5), H * (card ? 0 : 1.05), (12 + i * 7) * u, 0, Math.PI * 2); g.stroke(); }
+        break;
+      }
+    }
+    // Maska: u vizitky motiv mizí doleva k textu, jinde ke středu
+    g.globalAlpha = 1; g.globalCompositeOperation = 'destination-in';
+    const grad = card ? g.createLinearGradient(W * 0.36, 0, W * 0.62, 0) : g.createRadialGradient(W / 2, H * 0.42, Math.min(W, H) * 0.18, W / 2, H * 0.42, Math.max(W, H) * 0.62);
+    grad.addColorStop(0, 'rgba(0,0,0,0.12)'); grad.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = grad; g.fillRect(0, 0, W, H);
+    x.save(); x.globalAlpha = d.motifOpacity || 1; x.drawImage(c, 0, 0); x.restore();
+  }
+
+  // ================= Vlastní obrázek (logo nebo pozadí) =================
+  const IMGS = new Map();
+  function loadImg(src) {
+    if (!src) return Promise.resolve(null);
+    if (IMGS.has(src)) return Promise.resolve(IMGS.get(src));
+    return new Promise((res) => { const im = new Image(); im.onload = () => { IMGS.set(src, im); res(im); }; im.onerror = () => res(null); im.src = src; });
+  }
+  function drawUserBg(x, d, W, H) {
+    const im = d.img && d.imgMode === 'bg' && IMGS.get(d.img); if (!im) return false;
+    const s = Math.max(W / im.naturalWidth, H / im.naturalHeight), w = im.naturalWidth * s, h = im.naturalHeight * s;
+    x.drawImage(im, (W - w) / 2, (H - h) / 2, w, h);
+    x.save(); x.globalAlpha = 0.6; x.fillStyle = d.bg; x.fillRect(0, 0, W, H); x.restore(); // závoj kvůli čitelnosti textu
+    return true;
+  }
+  function drawUserLogo(x, d, W, H, fmt) {
+    const im = d.img && d.imgMode !== 'bg' && IMGS.get(d.img); if (!im || fmt === 'sticker') return;
+    const box = Math.min(W, H) * (fmt === 'card' ? 0.2 : 0.16), s = Math.min(box / im.naturalWidth, box / im.naturalHeight);
+    const w = im.naturalWidth * s, h = im.naturalHeight * s, m = Math.min(W, H) * 0.075;
+    x.drawImage(im, W - m - w, m, w, h);
+  }
+
   function drawPrint(fmt, d) {
+    const c = drawPrintBase(fmt, d);
+    drawUserLogo(c.getContext('2d'), d, c.width, c.height, fmt);
+    return c;
+  }
+  function drawPrintBase(fmt, d) {
     const F = FORMATS[fmt], W = F.W, H = F.H, ppm = W / F.mm;
     const cvs = document.createElement('canvas'); cvs.width = W; cvs.height = H;
     const x = cvs.getContext('2d'); x.textBaseline = 'alphabetic';
@@ -1090,8 +1418,11 @@ Odpověz PŘESNĚ takto: nejdřív JSON na jednom řádku, pak SVG.
 
     fill(d.bg); x.fillRect(0, 0, W, H);
     // Grafika na míru od AI (rozbité sklo, vlny, ornamenty…) jako pozadí pod textem
-    const artImg = d.art && ART.get(d.art);
-    if (artImg && artImg.complete && artImg.naturalWidth) { x.save(); x.globalAlpha = d.artOpacity || 1; x.drawImage(artImg, 0, 0, W, H); x.restore(); }
+    if (!drawUserBg(x, d, W, H)) {
+      const artImg = d.art && ART.get(d.art);
+      if (artImg && artImg.complete && artImg.naturalWidth) { x.save(); x.globalAlpha = d.artOpacity || 1; x.drawImage(artImg, 0, 0, W, H); x.restore(); }
+      else if (d.motif && d.motif !== 'none') drawMotif(x, d.motif, W, H, d, fmt);
+    }
 
     // ---------------- VIZITKA ----------------
     if (fmt === 'card') {
