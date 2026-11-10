@@ -1644,7 +1644,14 @@ Odpověz POUZE JSON objektem:
     const head = caseIt(d.headline || '');
 
     function qr(X, Y, S, tile, radius, ecl) {
-      const qk = d.qrScale || 1;
+      let qk = d.qrScale || 1;
+      // Hustý kód (hodně údajů) se sám zvětší, aby měl modul na tisku aspoň 0,36 mm a spolehlivě se načetl
+      {
+        const n = matrix(current.data, ecl || (fmt === 'card' ? 'L' : 'M')).n + (tile ? 6 : 4);
+        const sig = isPro() ? 0 : Math.max(S * 0.042, 1.3 * ppm) * 1.9;
+        const need = (0.36 * ppm * n + sig) / S;
+        if (need > qk) qk = Math.min(need, 1.9);
+      }
       if (qk !== 1) {
         const m = Math.min(W, H) * 0.045, S2 = Math.min(S * qk, Math.min(W, H) - m * 2), cx = X + S / 2, cy = Y + S / 2;
         X = Math.abs(cx - W / 2) < W * 0.08 ? cx - S2 / 2 : cx > W / 2 ? X + S - S2 : X;

@@ -106,7 +106,14 @@ jobs:
         with: { distribution: temurin, java-version: 21 }
       - run: npm ci
       - run: npx cap sync android
+      - name: Klíč pro Google Play
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then printf '%s' "$KS" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/upload.p12"; echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/upload.p12" >> "$GITHUB_ENV"; fi
       - run: chmod +x android/gradlew && cd android && ./gradlew assembleDebug bundleRelease --no-daemon
+        env:
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       - uses: actions/upload-artifact@v4
         with:
           name: Nacti-me-Android
