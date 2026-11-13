@@ -395,7 +395,7 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
   <a class="procta" id="upsell" href="https://nacti.me/pro/" hidden>
       <span class="kick">✦ Načti.me Pro</span>
       <b>Návrh přesně na míru od AI</b>
-      <span>Napíšete obor a představu a AI vám nakreslí vizitku s vlastní grafikou. Pro 99 Kč měsíčně (50 návrhů), Plus 249 Kč (500).</span>
+      <span>Napíšete obor a představu a AI vám nakreslí vizitku s vlastní grafikou. 99 Kč měsíčně.</span>
       <i>Vyzkoušet Pro →</i>
     </a>
 
@@ -1043,10 +1043,9 @@ Odpověz POUZE JSON objektem:
       try {
         d = sample ? await aiDesign(brief) : await serverDesign(brief);
         note = (d && typeof d.why === 'string' && d.why.trim()) ? d.why.trim().slice(0, 160) : '';
-        if (d && d.aiLimit && d.aiLimit < 9999 && d.aiLeft <= 10) note = (note ? note + ' ' : '') + `Tento měsíc vám zbývá ${d.aiLeft} AI návrhů.`;
       } catch (e) {
         note = e && e.code === 'pro_required' ? 'Vizitky na míru od AI jsou v Načti.me Pro. Zatím jsme upravili barvy, motiv a písmo podle přání.'
-          : e && e.code === 'ai_limit' ? (e.plan === 'plus' ? `Tento měsíc jste vyčerpali všech ${e.limit} AI návrhů. Nové budou 1. dne dalšího měsíce.` : `Tento měsíc jste vyčerpali ${e.limit} AI návrhů. V Načti.me Plus jich máte 500 (nacti.me/pro).`) + ' Zatím jsme upravili barvy a písmo podle přání.'
+          : e && e.code === 'ai_limit' ? (e.plan === 'plus' ? `Tento měsíc jste vyčerpali všech ${e.limit} AI návrhů. Nové budou 1. dne dalšího měsíce.` : 'Tento měsíc jste vyčerpali AI návrhy v Pro. Víc jich má Načti.me Plus: přejdete na ni v nacti.me/pro.') + ' Zatím jsme upravili barvy a písmo podle přání.'
           : 'AI teď neodpověděla, zkuste to prosím znovu. Zatím jsme upravili barvy a písmo podle přání.';
         d = null;
       }

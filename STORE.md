@@ -20,7 +20,7 @@ Vložte odkaz, text, e-mail nebo telefon a kód je hotový. Přepněte na Wi-Fi,
 • Kontrola čitelnosti: aplikace řekne, jak malý kód můžete vytisknout, aby se spolehlivě načetl.
 • Stažení v PNG i SVG pro tiskárnu.
 
-Načti.me Pro (99 Kč měsíčně, 50 AI návrhů) a Plus (249 Kč měsíčně, 500 AI návrhů): návrh vizitky přesně na míru od AI s vlastní grafikou, dynamické kódy, které po vytištění změníte, statistiky skenů, uložené vizitky a kódy bez podpisu.
+Načti.me Pro (99 Kč měsíčně): návrh vizitky přesně na míru od AI s vlastní grafikou, dynamické kódy, které po vytištění změníte, statistiky skenů, uložené vizitky a kódy bez podpisu.
 
 Od BrosWars Studio.
 

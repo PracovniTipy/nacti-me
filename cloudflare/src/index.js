@@ -11,8 +11,8 @@ const PRICE_KEY = "nacti_pro_monthly";
 const PRICE_CZK = 99;
 // Tarify: kolik AI návrhů na míru je v ceně za kalendářní měsíc
 const PLANS = {
-  pro: { key: PRICE_KEY, czk: PRICE_CZK, ai: 50, name: "Načti.me Pro", desc: "Dynamické QR kódy, statistiky, 50 AI návrhů vizitek měsíčně, fotky. Bez podpisu Načti.me." },
-  plus: { key: "nacti_plus_monthly", czk: 249, ai: 500, name: "Načti.me Plus", desc: "Vše z Pro a 500 AI návrhů vizitek měsíčně." },
+  pro: { key: PRICE_KEY, czk: PRICE_CZK, ai: 30, name: "Načti.me Pro", desc: "Dynamické QR kódy, statistiky, AI návrhy vizitek, fotky. Bez podpisu Načti.me." },
+  plus: { key: "nacti_plus_monthly", czk: 249, ai: 500, name: "Načti.me Plus", desc: "Vše z Pro a víc AI návrhů vizitek." },
 };
 const DAY = 864e5;
 const BOT = /bot|crawl|spider|preview|facebookexternalhit|slurp|headless|curl|wget|python/i;
@@ -289,7 +289,7 @@ async function design(req, env) {
   // Vizitky na míru od AI (s vlastní kresbou) jsou výhoda Načti.me Pro
   const a = await account(req, env);
   if (!isPro(a)) return err(req, "pro_required", 402);
-  // měsíční limit podle tarifu (Pro 50, Plus 500); nepovedené návrhy se vrací
+  // měsíční limit podle tarifu (Pro 30, Plus 500); nepovedené návrhy se vrací
   const limit = aiLimit(a);
   if (!(await hit(env, "aim", "acct:" + a.id, limit, month()))) {
     await env.DB.prepare("UPDATE usage SET n = ?1 WHERE kind = 'aim' AND ip = ?2 AND day = ?3").bind(limit, "acct:" + a.id, month()).run();
