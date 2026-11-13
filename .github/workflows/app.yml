@@ -56,7 +56,8 @@ jobs:
           $W r2 bucket create nacti-fotky 2>/dev/null || true
           $W d1 execute nacti-eu --remote --file schema.sql -y
           $W d1 execute nacti-eu --remote --command "ALTER TABLE accounts ADD COLUMN promo_until INTEGER" -y 2>/dev/null || true
-          $W d1 execute nacti-eu --remote --command "DELETE FROM usage WHERE day < date('now', '-2 days')" -y
+          $W d1 execute nacti-eu --remote --command "ALTER TABLE accounts ADD COLUMN plan TEXT" -y 2>/dev/null || true
+          $W d1 execute nacti-eu --remote --command "DELETE FROM usage WHERE (kind <> 'aim' AND day < date('now', '-2 days')) OR (kind = 'aim' AND day < strftime('%Y-%m', 'now', '-2 months'))" -y
           $W d1 execute nacti-eu --remote --command "INSERT OR IGNORE INTO accounts (id, email, sub_status, created_at) VALUES ('owner', 'BrosWars Studio', 'active', 0); INSERT OR IGNORE INTO tokens (hash, account_id, created_at) VALUES ('f987bba44f5abbe0431bc862c9a1eca6c9d0ceab91811b2d0227f0f4b027fad0', 'owner', 0);" -y  # majitel: Pro zdarma
           $W deploy | tee deploy.log
           AK=$(printf '%s' "$ANTHROPIC_API_KEY" | grep -oE 'sk-ant-[A-Za-z0-9_-]{20,}' | head -1 || true)

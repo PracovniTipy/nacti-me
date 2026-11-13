@@ -184,6 +184,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .price { display: flex; align-items: baseline; gap: 10px; }
 .price b { font-size: 64px; font-weight: 800; letter-spacing: -0.05em; }
 .price span { color: var(--muted); }
+.plans { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.plan { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 4px; padding: 16px 18px; border-radius: 16px; border: 1.5px solid rgba(255,255,255,.14); }
+.plan[aria-pressed="true"] { border-color: var(--up); background: rgba(255,255,255,.05); }
+.plan:focus-visible { outline: 2px solid var(--up); outline-offset: 2px; }
+.plan b { font-size: 15px; } .plan .num { font-size: 34px; font-weight: 800; letter-spacing: -0.04em; } .plan span { color: var(--muted); font-size: 14px; }
 .perks { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .perks li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; font-size: 16px; }
 .perks li::before { content: "✓"; color: var(--up); font-weight: 700; }
@@ -236,12 +241,15 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   <section class="gate" id="vPay" hidden>
     <div class="gcard">
       <span class="kick" id="payWho"></span>
-      <h1>Jeden tarif.<br><em>Bez omezení.</em></h1>
-      <div class="price"><b class="num">99 Kč</b><span>měsíčně · zrušíte kdykoli</span></div>
+      <h1>Vyberte si tarif.<br><em>Zrušíte kdykoli.</em></h1>
+      <div class="plans" role="group" aria-label="Tarif">
+        <button class="plan" type="button" data-plan="pro" aria-pressed="true"><b>Pro</b><span class="num">99 Kč</span><span>měsíčně · 50 AI návrhů</span></button>
+        <button class="plan" type="button" data-plan="plus" aria-pressed="false"><b>Plus</b><span class="num">249 Kč</span><span>měsíčně · 500 AI návrhů</span></button>
+      </div>
       <ul class="perks">
         <li>Kódy, které po vytištění změníte, kolik chcete</li>
         <li>Statistiky: kdy, kolikrát a čím lidé skenují</li>
-        <li>Neomezené AI návrhy vizitek, kartiček a samolepek</li>
+        <li>AI návrhy vizitek, kartiček a samolepek na míru (Pro 50, Plus 500 měsíčně)</li>
         <li>Až 50 fotek v jednom kódu</li>
         <li>Bez podpisu Načti.me na kódech</li>
       </ul>
@@ -689,6 +697,19 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     $('topRight').innerHTML = '<button class="btn ghost" type="button" id="deviceBtn">Přidat zařízení</button><button class="btn ghost" type="button" id="portalBtn">Předplatné</button><button class="btn ghost" type="button" id="logout2">Odhlásit</button><a class="btn" id="newCode2" href="../app/">Nový kód</a>';
     $('deviceBtn').addEventListener('click', addDevice);
     if (st.owner) { const pb = document.createElement('button'); pb.className = 'btn ghost'; pb.type = 'button'; pb.textContent = 'Promokódy'; pb.addEventListener('click', promosBox); $('topRight').prepend(pb); }
+    if (st.aiLimit) {
+      const plus = st.plan === 'plus', ab = document.createElement('button');
+      ab.className = 'btn ghost'; ab.type = 'button';
+      ab.textContent = `AI ${st.aiUsed}/${st.aiLimit > 9999 ? '∞' : st.aiLimit}` + (plus || st.owner ? '' : ' · Přejít na Plus');
+      ab.title = 'AI návrhy na míru tento měsíc';
+      if (!plus && !st.owner) ab.addEventListener('click', async () => {
+        if (!confirm('Přejít na Načti.me Plus za 249 Kč měsíčně s 500 AI návrhy? Rozdíl za zbytek měsíce se doplatí hned.')) return;
+        ab.disabled = true;
+        try { const r = await api('/pro/checkout', 'POST', { plan: 'plus' }); if (r.url) location.href = r.url; else { toast('Máte Načti.me Plus'); ab.textContent = `AI ${st.aiUsed}/500`; } }
+        catch (e) { ab.disabled = false; toast('Přechod na Plus se nepovedl, zkuste to znovu'); }
+      });
+      $('topRight').prepend(ab);
+    }
     if (!st.stripe) $('portalBtn').remove();
     else $('portalBtn').addEventListener('click', async () => { try { const r = await api('/pro/portal', 'POST'); location.href = r.url; } catch (e) { toast('Správu předplatného teď nejde otevřít'); } });
     $('logout2').addEventListener('click', logout);
@@ -786,9 +807,15 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   }
 
   async function startLive() {
+    let plan = 'pro';
+    document.querySelectorAll('.plan').forEach((b) => b.addEventListener('click', () => {
+      plan = b.dataset.plan;
+      document.querySelectorAll('.plan').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      $('payBtn').textContent = plan === 'plus' ? 'Předplatit Plus' : 'Předplatit Pro';
+    }));
     $('payBtn').addEventListener('click', async () => {
       $('payBtn').disabled = true; $('payMsg').className = 'gmsg'; $('payMsg').textContent = 'Otevírám bezpečnou platbu…';
-      try { const bw = window.BW && BW.click(), body = {}; if (promoDiscount) body.promo = promoDiscount; if (bw) body.click_id = bw; const r = await api('/pro/checkout', 'POST', body); location.href = r.url; }
+      try { const bw = window.BW && BW.click(), body = { plan }; if (promoDiscount) body.promo = promoDiscount; if (bw) body.click_id = bw; const r = await api('/pro/checkout', 'POST', body); location.href = r.url; }
       catch (e) { $('payBtn').disabled = false; $('payMsg').className = 'gmsg err'; $('payMsg').textContent = e.code === 'not_configured' ? 'Platby se právě spouštějí. Zkuste to prosím za chvíli.' : 'Platbu se nepodařilo otevřít. Zkuste to znovu.'; }
     });
     $('logout1').addEventListener('click', logout);

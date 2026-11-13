@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   stripe_customer TEXT UNIQUE,
   sub_status TEXT,
   period_end INTEGER,
+  plan TEXT,
   created_at INTEGER NOT NULL
 );
 

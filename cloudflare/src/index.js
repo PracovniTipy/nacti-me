@@ -9,6 +9,11 @@ const FREE_AI_DAILY = 3;
 const FREE_UPLOADS_DAILY = 60;
 const PRICE_KEY = "nacti_pro_monthly";
 const PRICE_CZK = 99;
+// Tarify: kolik AI návrhů na míru je v ceně za kalendářní měsíc
+const PLANS = {
+  pro: { key: PRICE_KEY, czk: PRICE_CZK, ai: 50, name: "Načti.me Pro", desc: "Dynamické QR kódy, statistiky, 50 AI návrhů vizitek měsíčně, fotky. Bez podpisu Načti.me." },
+  plus: { key: "nacti_plus_monthly", czk: 249, ai: 500, name: "Načti.me Plus", desc: "Vše z Pro a 500 AI návrhů vizitek měsíčně." },
+};
 const DAY = 864e5;
 const BOT = /bot|crawl|spider|preview|facebookexternalhit|slurp|headless|curl|wget|python/i;
 
@@ -46,12 +51,13 @@ function device(ua) {
   if (/windows|macintosh|linux/i.test(ua)) return "Počítač";
   return "Ostatní";
 }
-async function hit(env, kind, who, limit) {
+async function hit(env, kind, who, limit, period) {
   const row = await env.DB.prepare(
     "INSERT INTO usage (kind, ip, day, n) VALUES (?1, ?2, ?3, 1) ON CONFLICT (kind, ip, day) DO UPDATE SET n = n + 1 RETURNING n"
-  ).bind(kind, who, today()).first();
+  ).bind(kind, who, period || today()).first();
   return row.n <= limit;
 }
+const month = () => new Date().toISOString().slice(0, 7);
 
 // ---------------- účet ----------------
 async function account(req, env) {
@@ -61,6 +67,13 @@ async function account(req, env) {
 }
 const isPro = (a) => !!a && ((["active", "trialing", "past_due"].includes(a.sub_status) && (!a.period_end || a.period_end > now() - 3 * DAY)) || a.promo_until === -1 || (a.promo_until || 0) > now());
 const OWNER = "owner";
+// Tarif účtu: předplatné Plus → plus, jinak pro (i promokódy). Majitel bez limitu.
+const planOf = (a) => (a?.plan === "plus" && a.stripe_customer ? "plus" : "pro");
+const aiLimit = (a) => (a?.id === OWNER ? 100000 : PLANS[planOf(a)].ai);
+async function aiUsed(env, a) {
+  const r = await env.DB.prepare("SELECT n FROM usage WHERE kind = 'aim' AND ip = ?1 AND day = ?2").bind("acct:" + a.id, month()).first();
+  return Math.min(r?.n || 0, aiLimit(a));
+}
 async function newToken(env, accountId) {
   const t = rand(40);
   await env.DB.prepare("INSERT INTO tokens (hash, account_id, created_at) VALUES (?1, ?2, ?3)").bind(await sha(t), accountId, now()).run();
@@ -93,12 +106,26 @@ async function stripe(env, path, params, method, version) {
   if (!r.ok) throw new Error(j?.error?.message || "stripe_error");
   return j;
 }
-async function priceId(env) {
-  const found = await stripe(env, "prices", { "lookup_keys[]": PRICE_KEY, active: "true", limit: 1 }, "GET");
+async function priceId(env, plan) {
+  const P = PLANS[plan] || PLANS.pro;
+  const found = await stripe(env, "prices", { "lookup_keys[]": P.key, active: "true", limit: 1 }, "GET");
   if (found.data?.length) return found.data[0].id;
-  const product = await stripe(env, "products", { name: "Načti.me Pro", description: "Neomezené dynamické QR kódy, statistiky, AI návrhy a fotky. Bez podpisu Načti.me." });
-  const price = await stripe(env, "prices", { product: product.id, currency: "czk", unit_amount: PRICE_CZK * 100, recurring: { interval: "month" }, lookup_key: PRICE_KEY });
+  const product = await stripe(env, "products", { name: P.name, description: P.desc });
+  const price = await stripe(env, "prices", { product: product.id, currency: "czk", unit_amount: P.czk * 100, recurring: { interval: "month" }, lookup_key: P.key });
   return price.id;
+}
+// Přechod mezi Pro a Plus u běžícího předplatného (doplatek rozdílu hned, při snížení dobropis do další platby)
+async function changePlan(env, a, plan) {
+  if (!a?.stripe_customer) return false;
+  const subs = await stripe(env, "subscriptions", { customer: a.stripe_customer, status: "active", limit: 1 }, "GET");
+  const sub = subs.data?.[0], item = sub?.items?.data?.[0];
+  if (!item) return false;
+  await stripe(env, `subscriptions/${sub.id}`, {
+    "items[0][id]": item.id, "items[0][price]": await priceId(env, plan),
+    proration_behavior: plan === "plus" ? "always_invoice" : "create_prorations",
+  });
+  await env.DB.prepare("UPDATE accounts SET plan = ?1 WHERE id = ?2").bind(plan, a.id).run();
+  return true;
 }
 // Zákaznický portál Stripe (zrušení předplatného, změna karty, faktury) – založí se sám, když chybí
 async function ensurePortal(env, force) {
@@ -119,8 +146,9 @@ async function refresh(env, a) {
   const subs = await stripe(env, "subscriptions", { customer: a.stripe_customer, status: "all", limit: 1 }, "GET");
   const sub = subs.data?.[0];
   const end = sub ? (sub.items?.data?.[0]?.current_period_end ?? sub.current_period_end) : null;
-  const upd = { sub_status: sub?.status ?? null, period_end: end ? end * 1000 : null };
-  await env.DB.prepare("UPDATE accounts SET sub_status = ?1, period_end = ?2 WHERE id = ?3").bind(upd.sub_status, upd.period_end, a.id).run();
+  const key = sub?.items?.data?.[0]?.price?.lookup_key;
+  const upd = { sub_status: sub?.status ?? null, period_end: end ? end * 1000 : null, plan: key === PLANS.plus.key ? "plus" : "pro" };
+  await env.DB.prepare("UPDATE accounts SET sub_status = ?1, period_end = ?2, plan = ?3 WHERE id = ?4").bind(upd.sub_status, upd.period_end, upd.plan, a.id).run();
   return { ...a, ...upd };
 }
 
@@ -144,9 +172,8 @@ async function affAttach(env, accountId, clickId, at) {
 // Produkt Načti.me Pro (jen dohledání podle lookup_key, nic nezakládá)
 async function affProduct(env) {
   if (affProductCache && now() - affProductCache.at < 60 * 60e3) return affProductCache.id;
-  const found = await stripe(env, "prices", { "lookup_keys[]": PRICE_KEY, limit: 1 }, "GET", AFF_STRIPE_VERSION);
-  const p = found.data?.[0]?.product;
-  const id = typeof p === "string" ? p : p?.id || null;
+  const found = await stripe(env, "prices", { "lookup_keys[]": Object.values(PLANS).map((x) => x.key), limit: 10 }, "GET", AFF_STRIPE_VERSION);
+  const id = (found.data || []).map((x) => (typeof x.product === "string" ? x.product : x.product?.id)).filter(Boolean);
   affProductCache = { id, at: now() };
   return id;
 }
@@ -160,7 +187,7 @@ function affAmount(inv) {
 }
 async function affCollect(env, from) {
   const product = await affProduct(env);
-  if (!product) return [];
+  if (!product?.length) return [];
   const out = [], accounts = new Map();
   let after = null;
   for (let page = 0; page < AFF_MAX_PAGES; page++) {
@@ -174,7 +201,7 @@ async function affCollect(env, from) {
       if (!inv.livemode && env.AFF_INCLUDE_TEST !== "1") continue;      // jen ostré platby
       if (inv.paid_out_of_band) continue;                                 // ručně označené, žádné peníze přes Stripe
       if (String(inv.currency).toLowerCase() !== "czk") continue;
-      if (!(inv.lines?.data || []).some((l) => (l.price?.product || l.plan?.product) === product)) continue;
+      if (!(inv.lines?.data || []).some((l) => product.includes(l.price?.product || l.plan?.product))) continue;
       const cents = affAmount(inv);
       if (cents <= 0) continue;                                           // 100% sleva, vráceno, sporná platba
       let click = null;
@@ -186,7 +213,8 @@ async function affCollect(env, from) {
       const meta = inv.subscription_details?.metadata?.bw_click;
       if (!click && BW_ID.test(meta || "")) click = meta;
       if (!click) continue;
-      out.push({ external_id: inv.id, click_id: click, amount: cents / 100, currency: "CZK", paid_at: new Date(paidAt).toISOString(), description: "Načti.me Pro" });
+      const plus = (inv.lines?.data || []).some((l) => l.price?.lookup_key === PLANS.plus.key);
+      out.push({ external_id: inv.id, click_id: click, amount: cents / 100, currency: "CZK", paid_at: new Date(paidAt).toISOString(), description: plus ? "Načti.me Plus" : "Načti.me Pro" });
     }
     if (!list.has_more || !list.data?.length) break;
     after = list.data[list.data.length - 1].id;
@@ -261,9 +289,13 @@ async function design(req, env) {
   // Vizitky na míru od AI (s vlastní kresbou) jsou výhoda Načti.me Pro
   const a = await account(req, env);
   if (!isPro(a)) return err(req, "pro_required", 402);
-  // ochrana proti zneužití: max. 200 návrhů denně na účet
-  if (!(await hit(env, "ai", "acct:" + a.id, 200))) return err(req, "rate_limited", 429);
-  const refund = () => env.DB.prepare("UPDATE usage SET n = n - 1 WHERE kind = 'ai' AND ip = ?1 AND day = ?2 AND n > 0").bind("acct:" + a.id, today()).run();
+  // měsíční limit podle tarifu (Pro 50, Plus 500); nepovedené návrhy se vrací
+  const limit = aiLimit(a);
+  if (!(await hit(env, "aim", "acct:" + a.id, limit, month()))) {
+    await env.DB.prepare("UPDATE usage SET n = ?1 WHERE kind = 'aim' AND ip = ?2 AND day = ?3").bind(limit, "acct:" + a.id, month()).run();
+    return json(req, { error: "ai_limit", plan: planOf(a), limit }, 429);
+  }
+  const refund = () => env.DB.prepare("UPDATE usage SET n = n - 1 WHERE kind = 'aim' AND ip = ?1 AND day = ?2 AND n > 0").bind("acct:" + a.id, month()).run();
 
   const format = LAYOUTS[body?.format] ? body.format : "card";
   const brief = clip(body?.brief, 600);
@@ -325,6 +357,8 @@ Odpověz PŘESNĚ v tomto tvaru: nejdřív JSON na jednom řádku, pak SVG.
   const svg = svgAt >= 0 ? (raw.slice(svgAt).match(/<svg[\s\S]*<\/svg>/i) || [""])[0] : "";
   d.art = cleanSvg(svg);
   if (ban.length) { if (hasWord(d.tagline, ban)) d.tagline = ""; if (format !== "card" && hasWord(d.headline, ban)) d.headline = ""; }
+  d.aiLeft = Math.max(0, limit - (await aiUsed(env, a)));
+  d.aiLimit = limit;
   return json(req, d);
 }
 
@@ -391,9 +425,14 @@ export default {
       if (p === "/pro/checkout" && M === "POST") {
         const a = await account(req, env);
         const pb = await req.json().catch(() => ({}));
+        const plan = PLANS[pb?.plan] ? pb.plan : "pro";
+        // už platí? jen přepneme tarif v běžícím předplatném
+        if (a?.stripe_customer && isPro(await refresh(env, a))) {
+          if (await changePlan(env, a, plan)) return json(req, { changed: true, plan });
+        }
         const params = {
           mode: "subscription", locale: "cs", allow_promotion_codes: "true",
-          "line_items[0][price]": await priceId(env), "line_items[0][quantity]": 1,
+          "line_items[0][price]": await priceId(env, plan), "line_items[0][quantity]": 1,
           success_url: `${SITE}/pro/?s={CHECKOUT_SESSION_ID}`, cancel_url: `${SITE}/pro/`,
         };
         if (a?.stripe_customer) params.customer = a.stripe_customer;
@@ -478,6 +517,7 @@ export default {
       if (p === "/pro/status" && M === "GET") {
         let b = a; try { b = await refresh(env, a); } catch (e) { if (e.message === "not_configured") return err(req, "not_configured", 503); }
         return json(req, { pro: isPro(b), status: b.sub_status, periodEnd: b.period_end ? new Date(b.period_end).toISOString() : null, email: b.email, priceCzk: PRICE_CZK,
+          plan: planOf(b), aiUsed: await aiUsed(env, b), aiLimit: aiLimit(b), plans: Object.fromEntries(Object.entries(PLANS).map(([k, v]) => [k, { czk: v.czk, ai: v.ai }])),
           owner: b.id === OWNER, promoUntil: b.promo_until === -1 ? "forever" : b.promo_until ? new Date(b.promo_until).toISOString() : null, stripe: !!b.stripe_customer });
       }
       if (p === "/pro/promos" && a.id === OWNER) {
