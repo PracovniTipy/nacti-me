@@ -696,7 +696,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       ab.className = 'btn'; ab.type = 'button'; ab.textContent = 'Víc AI návrhů: Plus';
       ab.title = 'AI návrhy na tento měsíc jste vyčerpali';
       ab.addEventListener('click', async () => {
-        if (!confirm('Přejít na Načti.me Plus za 249 Kč měsíčně s 500 AI návrhy? Rozdíl za zbytek měsíce se doplatí hned.')) return;
+        if (!confirm('Přejít na Načti.me Plus za 249 Kč měsíčně se 100 AI návrhy? Rozdíl za zbytek měsíce se doplatí hned.')) return;
         ab.disabled = true;
         try { const r = await api('/pro/checkout', 'POST', { plan: 'plus' }); if (r.url) location.href = r.url; else { toast('Máte Načti.me Plus'); ab.remove(); } }
         catch (e) { ab.disabled = false; toast('Přechod na Plus se nepovedl, zkuste to znovu'); }
