@@ -107,6 +107,13 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .hint i { width: 1px; height: 22px; background: linear-gradient(var(--muted), transparent); animation: drip 1.8s ease-in-out infinite; transform-origin: top; }
 @keyframes drip { 0% { transform: scaleY(0); } 50% { transform: scaleY(1); } 100% { transform: scaleY(1); opacity: 0; } }
 
+@media (hover: none), (max-width: 760px) {
+  .pill, .hint { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(30,29,38,.9); }
+  .glow::before, .glow::after { filter: none; opacity: .5; }
+  .grain { mix-blend-mode: normal; opacity: .035; }
+  .phone { box-shadow: 0 0 0 1.5px rgba(255,255,255,.18), 0 30px 50px -20px rgba(0,0,0,.9), 0 0 40px -10px var(--g1); }
+}
+
 /* Telefon */
 .phone {
   position: absolute; z-index: 2; left: var(--px); top: var(--py); width: var(--pw); aspect-ratio: 9 / 19.2;
@@ -121,8 +128,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .phone .frame b:nth-child(2) { right: -2px; top: -2px; border-left: 0; border-bottom: 0; border-radius: 0 16px 0 0; }
 .phone .frame b:nth-child(3) { left: -2px; bottom: -2px; border-right: 0; border-top: 0; border-radius: 0 0 0 16px; }
 .phone .frame b:nth-child(4) { right: -2px; bottom: -2px; border-left: 0; border-top: 0; border-radius: 0 0 16px 0; }
-.phone .scan { position: absolute; left: 4%; right: 4%; height: 2px; top: 10%; background: linear-gradient(90deg, transparent, #fff, transparent); box-shadow: 0 0 18px 2px rgba(255,255,255,.7); animation: scan 1.6s ease-in-out infinite alternate; }
-@keyframes scan { to { top: 88%; } }
+.phone .scan { position: absolute; left: 4%; right: 4%; height: 2px; top: 10%; background: linear-gradient(90deg, transparent, #fff, transparent); box-shadow: 0 0 18px 2px rgba(255,255,255,.7); will-change: transform; animation: scan 1.6s ease-in-out infinite alternate; }
+/* výkon: sken jede přes transform (top by v každém snímku přepočítával rozvržení) */
+@keyframes scan { to { transform: translateY(calc(var(--pw) * 1.66)); } }
 .phone:not(.vis) .scan { animation-play-state: paused; }
 .toast {
   position: absolute; left: 8%; right: 8%; bottom: 7%; padding: 12px 14px; border-radius: 16px; display: flex; gap: 10px; align-items: center;
@@ -275,7 +283,7 @@ footer a { color: var(--muted); }
     const r = cv.getBoundingClientRect(); W = r.width; H = r.height;
     let d0 = Math.min(window.devicePixelRatio || 1, 3);
     if (W * H * d0 * d0 > 2.2e7) d0 = Math.sqrt(2.2e7 / (W * H));
-    DPR = Math.min(d0, 2);
+    DPR = Math.min(d0, W < 760 ? 1.75 : 2); // telefony: o čtvrtinu méně pixelů na snímek, ostrost stejná
     SHK = DPR / d0; // stín vizitky byl v pixelech zařízení – zachovat stejnou velikost
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
     measure();
