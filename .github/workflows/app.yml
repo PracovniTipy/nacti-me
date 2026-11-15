@@ -110,14 +110,26 @@ jobs:
       - name: Klíč pro Google Play
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KP: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -n "$KS" ]; then printf '%s' "$KS" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/upload.p12"; echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/upload.p12" >> "$GITHUB_ENV"; fi
-      - run: chmod +x android/gradlew && cd android && ./gradlew assembleDebug bundleRelease --no-daemon
-        env:
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # vložené hodnoty očistíme (mezery, celý řádek „Heslo …: xxx“ apod.) a klíč ověříme
+          if [ -n "$KS" ]; then
+            printf '%s' "$KS" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/upload.p12" 2>/dev/null || true
+            PW=$(printf '%s' "$KP" | grep -oE '[A-Za-z0-9]{12,}' | tail -1 || true)
+            if [ -n "$PW" ] && keytool -list -storetype pkcs12 -keystore "$RUNNER_TEMP/upload.p12" -storepass "$PW" >/dev/null 2>&1; then
+              echo "::add-mask::$PW"
+              echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/upload.p12" >> "$GITHUB_ENV"
+              echo "ANDROID_KEY_PASSWORD=$PW" >> "$GITHUB_ENV"
+              echo "Podpisový klíč: OK"
+            else
+              echo "::warning::Podpisový klíč nejde otevřít (klíč ${#KS} znaků, heslo ${#KP} znaků) – sestavuji bez podpisu"
+            fi
+          fi
+      - run: chmod +x android/gradlew && cd android && ./gradlew assembleDebug $( [ -n "$ANDROID_KEYSTORE_FILE" ] && echo assembleRelease ) bundleRelease --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: Nacti-me-Android
           path: |
             android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/bundle/release/app-release.aab
